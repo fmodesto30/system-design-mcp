@@ -10,7 +10,7 @@ reais (workbook + 3 repositórios + microservices.io) e sem LLM em runtime.
 
 | Camada | Stack | Estado |
 |--------|-------|--------|
-| BFF | Java 21 + Spring Boot 3.4 (hexagonal) | compila, **16 testes verdes**, sobe live em :8080 |
+| BFF | Java 21 + Spring Boot 3.4 (hexagonal) | compila, **17 testes verdes**, sobe live em :8080 |
 | Frontend | React + Vite + TypeScript (strict) | **build OK**, 11 telas, roda live em :5173 |
 | Knowledge base | JSON versionado + JSON Schema | validado por schema + teste de integridade |
 | Docs | Markdown (inventário, mapa, ADRs, runbook, guia, trade-offs, glossário) | completos |
@@ -23,6 +23,7 @@ reais (workbook + 3 repositórios + microservices.io) e sem LLM em runtime.
 - **30 perguntas** de entrevista (resposta curta/detalhada/desenho mental/riscos/trade-offs/como responder)
 - **12 diagramas** Mermaid
 - **24 evidências** (matriz afirmação → evidência → fonte)
+- **13 termos** no módulo **IA & Agentes** (trilha separada, sourced a refs de IA)
 
 ## 2. Estrutura de diretórios
 
@@ -65,13 +66,13 @@ cd frontend && npm run build
 
 `/api/topics[/{id}]` · `/api/patterns[/{id}]` · `/api/flows[/{id}]` ·
 `/api/interview/questions[/{id}]` · `/api/diagrams[/{id}]` · `/api/evidence` ·
-`/api/meta/stats` · `/actuator/health` · `/actuator/prometheus`.
+`/api/ai-glossary` · `/api/meta/stats` · `/actuator/health` · `/actuator/prometheus`.
 
 ## 5. Telas disponíveis
 
 Início (mapa de tópicos + stats) · Tópicos · Tópico (detalhe) · Padrões · Padrão ·
 Fluxos · Fluxo · Diagramas (galeria Mermaid) · **Modo Entrevista** (Q&A expansível) ·
-**Comparar arquiteturas** · **Evidências e fontes**.
+**Comparar arquiteturas** · **Evidências e fontes** · **IA & Agentes** (glossário + quiz).
 
 ## 6. Padrões documentados
 
@@ -91,7 +92,7 @@ Bulkhead · Cell-Based Architecture.
 | Critério | Status |
 |----------|:------:|
 | Compila (BFF) | ✅ `./mvnw test` BUILD SUCCESS |
-| Testes mínimos (unit + contrato + integridade) | ✅ 16 testes |
+| Testes mínimos (unit + contrato + integridade) | ✅ 17 testes |
 | Build do frontend | ✅ `npm run build` OK |
 | README funcional | ✅ |
 | docker-compose | ✅ |
@@ -108,7 +109,7 @@ Bulkhead · Cell-Based Architecture.
 
 - `python scripts/merge_validate_kb.py` → 29/20/7/30/12/24 itens, **0 erros de schema**, 0 ids duplicados.
 - cross-ref check → **0 referências quebradas**.
-- `./mvnw test` → `Tests run: 16, Failures: 0, Errors: 0` — **BUILD SUCCESS** (Java 21).
+- `./mvnw test` → `Tests run: 17, Failures: 0, Errors: 0` — **BUILD SUCCESS** (Java 21).
 - `npm run build` → **built** (tsc strict + vite).
 - BFF live (`spring-boot:run`) → `/actuator/health` UP, `/api/meta/stats` correto.
 - Frontend live (`:5173`) → home, mapa de tópicos, **12 diagramas Mermaid renderizados (0 erros)**,
@@ -137,3 +138,18 @@ mais diagramas por fluxo · export do guia em PDF · code-split do Mermaid.
 | `pip` no venv | `No module named pip` | venv sem pip | `ensurepip` |
 | Download do Maven (mirror) | zip 0 byte | mirror dlcdn falhou | re-download do `archive.apache.org` |
 | `tsc -b` | TS6306/TS6310 (composite) | project reference exigia `composite` | trocar para `tsc --noEmit` + remover a referência |
+
+## 13. Atualizações pós-entrega (mesma sessão)
+
+- **Módulo "IA & Agentes"** (pedido do Felipe, dev backend aprendendo IA): glossário de 13 termos
+  (token..eval) com analogias de backend e enquadramento motor/casca/loop. Trilha SEPARADA do
+  System Design — fontes são refs de IA (Anthropic, MCP spec), não o workbook. Arquivos:
+  `knowledge-base/ai-agents-glossary.json`, `docs/ai-agents-glossary.md`, página `/ai-agents`,
+  `GET /api/ai-glossary`. Total agora: **17 testes** verdes.
+- **Fix de links quebrados:** o front linkava toda fonte `reference` pra microservices.io e arquivos
+  de repo via `tree/main` (404). Agora cada `sourceRef` carrega um `url` **verificado com curl em
+  build-time** (`scripts/resolve_source_urls.py`): deep-link quando existe, fallback pro índice de
+  padrões quando não, raiz do repo pra repos, sem link pro PDF. Varredura final: **28 URLs únicas,
+  0 quebradas**.
+- **Docker:** `docker compose up --build` validado live; UI :5173, BFF host **18080** (8080 ocupado
+  por outra stack na máquina). No container Linux o BFF sobe sem o workaround AF_UNIX.

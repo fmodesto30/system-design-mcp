@@ -66,8 +66,7 @@ export function Interview() {
       <h1>Modo Entrevista</h1>
       <p className="lede">
         Perguntas de System Design no estilo arquiteto/staff. Clique para ver resposta curta, detalhada, desenho
-        mental e como responder. Veja também o <a href="#" onClick={(e) => e.preventDefault()}>guia</a> em{" "}
-        <code>docs/interview-guide.md</code>.
+        mental e como responder. Veja também o guia completo em <code>docs/interview-guide.md</code>.
       </p>
       <Async state={state}>
         {(list) => (
