@@ -10,6 +10,7 @@ import { PatternDetail } from "./pages/PatternDetail";
 import { Flows } from "./pages/Flows";
 import { FlowDetail } from "./pages/FlowDetail";
 import { Diagrams } from "./pages/Diagrams";
+import { DiagramDetail } from "./pages/DiagramDetail";
 import { Interview } from "./pages/Interview";
 import { Compare } from "./pages/Compare";
 import { EvidencePage } from "./pages/Evidence";
@@ -29,6 +30,7 @@ const router = createBrowserRouter([
       { path: "flows", element: <Flows /> },
       { path: "flows/:id", element: <FlowDetail /> },
       { path: "diagrams", element: <Diagrams /> },
+      { path: "diagrams/:id", element: <DiagramDetail /> },
       { path: "interview", element: <Interview /> },
       { path: "compare", element: <Compare /> },
       { path: "evidence", element: <EvidencePage /> },
