@@ -14,6 +14,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -84,6 +85,18 @@ class KnowledgeBaseIntegrityTest {
     }
 
     @Test
+    void idsAreUniqueWithinEachCollection() {
+        assertUniqueIds("topics", kb.topics().stream().map(Topic::id).toList());
+        assertUniqueIds("patterns", kb.patterns().stream().map(Pattern::id).toList());
+        assertUniqueIds("flows", kb.flows().stream().map(Flow::id).toList());
+        assertUniqueIds("questions", kb.interviewQuestions().stream().map(InterviewQuestion::id).toList());
+        assertUniqueIds("diagrams", kb.diagrams().stream().map(Diagram::id).toList());
+        assertUniqueIds("evidence", kb.evidence().stream().map(Evidence::id).toList());
+        assertUniqueIds("ai-glossary", kb.aiGlossary().stream().map(g -> g.id()).toList());
+        assertUniqueIds("databases", kb.databases().stream().map(Database::id).toList());
+    }
+
+    @Test
     void crossReferencesResolve() {
         Set<String> topicIds = kb.topics().stream().map(Topic::id).collect(Collectors.toSet());
         Set<String> patternIds = kb.patterns().stream().map(Pattern::id).collect(Collectors.toSet());
@@ -138,6 +151,12 @@ class KnowledgeBaseIntegrityTest {
         for (String ref : refs) {
             assertThat(universe).as(who + " -> '" + ref + "'").contains(ref);
         }
+    }
+
+    private static void assertUniqueIds(String coll, List<String> ids) {
+        Set<String> seen = new HashSet<>();
+        List<String> dups = ids.stream().filter(id -> !seen.add(id)).distinct().toList();
+        assertThat(dups).as(coll + " duplicate ids").isEmpty();
     }
 
     private static void assertDbRec(String who, DatabaseRecommendation rec, Set<String> databaseIds) {
