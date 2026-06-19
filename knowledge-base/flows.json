@@ -592,8 +592,7 @@
         "kind": "reference",
         "source": "knowledge-base.schema.json",
         "locator": "knowledge-base/schema/knowledge-base.schema.json",
-        "note": "o BFF Java desserializa estes arquivos em records; o frontend os renderiza",
-        "url": "https://knowledge-base.schema.json"
+        "note": "o BFF Java desserializa estes arquivos em records; o frontend os renderiza"
       },
       {
         "kind": "pdf",

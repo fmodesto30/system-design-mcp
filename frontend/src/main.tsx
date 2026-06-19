@@ -15,6 +15,9 @@ import { Interview } from "./pages/Interview";
 import { Compare } from "./pages/Compare";
 import { EvidencePage } from "./pages/Evidence";
 import { AiGlossary } from "./pages/AiGlossary";
+import { Databases } from "./pages/Databases";
+import { DatabaseDetail } from "./pages/DatabaseDetail";
+import { DatabaseBuilder } from "./pages/DatabaseBuilder";
 import "./styles.css";
 
 const router = createBrowserRouter([
@@ -35,6 +38,9 @@ const router = createBrowserRouter([
       { path: "compare", element: <Compare /> },
       { path: "evidence", element: <EvidencePage /> },
       { path: "ai-agents", element: <AiGlossary /> },
+      { path: "databases", element: <Databases /> },
+      { path: "databases/builder", element: <DatabaseBuilder /> },
+      { path: "databases/:id", element: <DatabaseDetail /> },
     ],
   },
 ]);

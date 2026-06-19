@@ -6,6 +6,7 @@ const NAV: { to: string; label: string }[] = [
   { to: "/patterns", label: "Padrões" },
   { to: "/flows", label: "Fluxos" },
   { to: "/diagrams", label: "Diagramas" },
+  { to: "/databases", label: "Bancos de Dados" },
   { to: "/interview", label: "Modo Entrevista" },
   { to: "/compare", label: "Comparar" },
   { to: "/evidence", label: "Evidências" },

@@ -11,6 +11,7 @@ public record Flow(
         List<Step> steps,
         List<String> relatedPatterns,
         String diagram,
+        DatabaseRecommendation databaseRecommendation,
         List<SourceRef> sourceRefs) {
 
     public Flow {

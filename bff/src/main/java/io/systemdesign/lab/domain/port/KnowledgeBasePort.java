@@ -1,5 +1,6 @@
 package io.systemdesign.lab.domain.port;
 
+import io.systemdesign.lab.domain.model.Database;
 import io.systemdesign.lab.domain.model.Diagram;
 import io.systemdesign.lab.domain.model.Evidence;
 import io.systemdesign.lab.domain.model.Flow;
@@ -28,6 +29,9 @@ public interface KnowledgeBasePort {
     List<Diagram> diagrams();
 
     List<Evidence> evidence();
+
+    /** Catálogo de bancos de dados AWS (preço, CAP/PACELC, failover) — alimenta o decisor de bancos. */
+    List<Database> databases();
 
     /** AI &amp; Agents glossary — separate track, sourced to AI references (not the workbook). */
     List<GlossaryEntry> aiGlossary();

@@ -14,6 +14,36 @@ export interface TradeOff {
   con: string;
 }
 
+export interface DatabaseRecommendation {
+  suggestedDbId: string;
+  level?: string;
+  rationale: string;
+}
+
+export interface DatabaseSummary {
+  id: string;
+  name: string;
+  category: string;
+  engine: string;
+  summary: string;
+  priceMonthly: string;
+  capTheorem: string;
+}
+
+export interface Database extends DatabaseSummary {
+  priceAnnual: string;
+  pacelc: string;
+  failover: string;
+  azs: string;
+  whenToUse: string[];
+  whenToAvoid: string[];
+  tradeOffs: TradeOff[];
+  relatedPatterns: string[];
+  relatedTopics: string[];
+  diagrams: string[];
+  sourceRefs: SourceRef[];
+}
+
 export interface TopicSummary {
   id: string;
   title: string;
@@ -29,6 +59,7 @@ export interface Topic extends TopicSummary {
   interviewAngle: string;
   example: string;
   diagrams: string[];
+  databaseRecommendation?: DatabaseRecommendation;
   sourceRefs: SourceRef[];
 }
 
@@ -49,6 +80,7 @@ export interface Pattern extends PatternSummary {
   relatedPatterns: string[];
   interviewAngle: string;
   diagrams: string[];
+  databaseRecommendation?: DatabaseRecommendation;
   sourceRefs: SourceRef[];
 }
 
@@ -70,6 +102,7 @@ export interface Flow extends FlowSummary {
   steps: FlowStep[];
   relatedPatterns: string[];
   diagram?: string | null;
+  databaseRecommendation?: DatabaseRecommendation;
   sourceRefs: SourceRef[];
 }
 
@@ -134,6 +167,7 @@ export interface Stats {
   diagrams: number;
   evidence: number;
   aiGlossary: number;
+  databases: number;
 }
 
 async function get<T>(path: string): Promise<T> {
@@ -158,4 +192,6 @@ export const api = {
   diagram: (id: string) => get<Diagram>(`/api/diagrams/${id}`),
   evidence: () => get<Evidence[]>("/api/evidence"),
   aiGlossary: () => get<GlossaryEntry[]>("/api/ai-glossary"),
+  databases: () => get<DatabaseSummary[]>("/api/databases"),
+  database: (id: string) => get<Database>(`/api/databases/${id}`),
 };

@@ -1,5 +1,7 @@
 package io.systemdesign.lab;
 
+import io.systemdesign.lab.domain.model.Database;
+import io.systemdesign.lab.domain.model.DatabaseRecommendation;
 import io.systemdesign.lab.domain.model.Diagram;
 import io.systemdesign.lab.domain.model.Evidence;
 import io.systemdesign.lab.domain.model.Flow;
@@ -49,6 +51,7 @@ class KnowledgeBaseIntegrityTest {
         assertThat(kb.interviewQuestions()).as("interview questions").isNotEmpty();
         assertThat(kb.diagrams()).as("diagrams").isNotEmpty();
         assertThat(kb.evidence()).as("evidence").isNotEmpty();
+        assertThat(kb.databases()).as("databases").isNotEmpty();
     }
 
     @Test
@@ -59,6 +62,7 @@ class KnowledgeBaseIntegrityTest {
         kb.interviewQuestions().forEach(q -> assertHasSource("question:" + q.id(), q.sourceRefs()));
         kb.diagrams().forEach(d -> assertHasSource("diagram:" + d.id(), d.sourceRefs()));
         kb.evidence().forEach(e -> assertHasSource("evidence:" + e.id(), e.sourceRefs()));
+        kb.databases().forEach(d -> assertHasSource("database:" + d.id(), d.sourceRefs()));
     }
 
     @Test
@@ -84,6 +88,7 @@ class KnowledgeBaseIntegrityTest {
         Set<String> topicIds = kb.topics().stream().map(Topic::id).collect(Collectors.toSet());
         Set<String> patternIds = kb.patterns().stream().map(Pattern::id).collect(Collectors.toSet());
         Set<String> diagramIds = kb.diagrams().stream().map(Diagram::id).collect(Collectors.toSet());
+        Set<String> databaseIds = kb.databases().stream().map(Database::id).collect(Collectors.toSet());
 
         for (Topic t : kb.topics()) {
             assertSubset("topic:" + t.id() + ".relatedPatterns", t.relatedPatterns(), patternIds);
@@ -111,6 +116,15 @@ class KnowledgeBaseIntegrityTest {
         for (Evidence e : kb.evidence()) {
             assertSubset("evidence:" + e.id() + ".relatedPatterns", e.relatedPatterns(), patternIds);
         }
+        for (Database d : kb.databases()) {
+            assertSubset("database:" + d.id() + ".relatedPatterns", d.relatedPatterns(), patternIds);
+            assertSubset("database:" + d.id() + ".relatedTopics", d.relatedTopics(), topicIds);
+            assertSubset("database:" + d.id() + ".diagrams", d.diagrams(), diagramIds);
+        }
+        // Pré-sugestões de banco apontam para um Database real.
+        kb.topics().forEach(t -> assertDbRec("topic:" + t.id(), t.databaseRecommendation(), databaseIds));
+        kb.patterns().forEach(p -> assertDbRec("pattern:" + p.id(), p.databaseRecommendation(), databaseIds));
+        kb.flows().forEach(f -> assertDbRec("flow:" + f.id(), f.databaseRecommendation(), databaseIds));
     }
 
     private static void assertHasSource(String who, List<SourceRef> refs) {
@@ -123,6 +137,13 @@ class KnowledgeBaseIntegrityTest {
     private static void assertSubset(String who, List<String> refs, Set<String> universe) {
         for (String ref : refs) {
             assertThat(universe).as(who + " -> '" + ref + "'").contains(ref);
+        }
+    }
+
+    private static void assertDbRec(String who, DatabaseRecommendation rec, Set<String> databaseIds) {
+        if (rec != null && rec.suggestedDbId() != null && !rec.suggestedDbId().isBlank()) {
+            assertThat(databaseIds).as(who + ".databaseRecommendation -> '" + rec.suggestedDbId() + "'")
+                    .contains(rec.suggestedDbId());
         }
     }
 

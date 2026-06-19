@@ -27,6 +27,43 @@
         "con": { "type": "string" }
       }
     },
+    "DatabaseRecommendation": {
+      "type": "object",
+      "description": "Pré-sugestão de banco para uma arquitetura. A referência manda na linguagem; o usuário decide no decisor de bancos.",
+      "required": ["suggestedDbId", "rationale"],
+      "additionalProperties": false,
+      "properties": {
+        "suggestedDbId": { "type": "string", "pattern": "^[a-z0-9-]+$", "description": "id de um Database em databases.json" },
+        "level": { "enum": ["high", "medium"], "description": "quão central é a escolha de banco para esta arquitetura" },
+        "rationale": { "type": "string", "description": "uma linha: por que este banco encaixa nesta arquitetura" }
+      }
+    },
+    "Database": {
+      "type": "object",
+      "description": "Uma opção de banco de dados AWS, com dados canônicos públicos (preço, CAP/PACELC, failover, AZs) e fonte.",
+      "required": ["id", "name", "category", "summary", "sourceRefs"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+        "name": { "type": "string" },
+        "category": { "type": "string", "description": "Relacional | NoSQL" },
+        "engine": { "type": "string", "description": "e.g. 'PostgreSQL', 'Key-Value', 'Document (MongoDB 5.0)'" },
+        "summary": { "type": "string", "description": "1-2 frases" },
+        "priceMonthly": { "type": "string", "description": "e.g. '$539', '$180–600'" },
+        "priceAnnual": { "type": "string", "description": "e.g. '~$6.468'" },
+        "capTheorem": { "type": "string", "description": "CP | AP" },
+        "pacelc": { "type": "string", "description": "e.g. 'PC/EC', 'PA/EL'" },
+        "failover": { "type": "string", "description": "e.g. '<30s', '60-120s', 'automático'" },
+        "azs": { "type": "string", "description": "e.g. '3 AZs (6 cópias)'" },
+        "whenToUse": { "type": "array", "items": { "type": "string" } },
+        "whenToAvoid": { "type": "array", "items": { "type": "string" } },
+        "tradeOffs": { "type": "array", "items": { "$ref": "#/$defs/TradeOff" } },
+        "relatedPatterns": { "type": "array", "items": { "type": "string" } },
+        "relatedTopics": { "type": "array", "items": { "type": "string" } },
+        "diagrams": { "type": "array", "items": { "type": "string" } },
+        "sourceRefs": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/SourceRef" } }
+      }
+    },
     "Topic": {
       "type": "object",
       "required": ["id", "title", "category", "summary", "detailedExplanation", "sourceRefs"],
@@ -43,6 +80,7 @@
         "interviewAngle": { "type": "string", "description": "How this shows up in a System Design interview" },
         "example": { "type": "string", "description": "Concrete example, ideally tied to the repos" },
         "diagrams": { "type": "array", "items": { "type": "string" }, "description": "diagram ids" },
+        "databaseRecommendation": { "$ref": "#/$defs/DatabaseRecommendation" },
         "sourceRefs": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/SourceRef" } }
       }
     },
@@ -64,6 +102,7 @@
         "relatedPatterns": { "type": "array", "items": { "type": "string" } },
         "interviewAngle": { "type": "string" },
         "diagrams": { "type": "array", "items": { "type": "string" } },
+        "databaseRecommendation": { "$ref": "#/$defs/DatabaseRecommendation" },
         "sourceRefs": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/SourceRef" } }
       }
     },
@@ -93,6 +132,7 @@
         },
         "relatedPatterns": { "type": "array", "items": { "type": "string" } },
         "diagram": { "type": "string", "description": "diagram id" },
+        "databaseRecommendation": { "$ref": "#/$defs/DatabaseRecommendation" },
         "sourceRefs": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/SourceRef" } }
       }
     },

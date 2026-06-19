@@ -1,0 +1,209 @@
+[
+  {
+    "id": "aurora-postgresql",
+    "name": "Aurora PostgreSQL",
+    "category": "Relacional",
+    "engine": "PostgreSQL (provisioned, db.r7g.xlarge / ARM Graviton3)",
+    "summary": "Relacional gerenciado compatível com PostgreSQL, com storage distribuído em 6 cópias por 3 AZs já incluso. ACID forte com failover rápido e o melhor custo/AZ entre os relacionais.",
+    "priceMonthly": "$539",
+    "priceAnnual": "~$6.468",
+    "capTheorem": "CP",
+    "pacelc": "PC/EC",
+    "failover": "<30s",
+    "azs": "3 AZs (6 cópias, incluso)",
+    "whenToUse": [
+      "Sistema transacional com consistência forte (saldo, limite, ledger).",
+      "Carga inicial alta (~75M registros) com 3 AZs obrigatórias.",
+      "JOINs, CTEs e JSONB num único motor relacional maduro."
+    ],
+    "whenToAvoid": [
+      "Workload key-value de latência <10ms e escala horizontal ilimitada.",
+      "Picos imprevisíveis com longos períodos ociosos (prefira Serverless v2)."
+    ],
+    "tradeOffs": [
+      { "dimension": "Consistência", "pro": "Forte (ACID); 6 cópias em 3 AZs com failover <30s.", "con": "Coordenação cobra latência e limita a escala de escrita a 1 writer." },
+      { "dimension": "Custo", "pro": "$539/mês — ~38% mais barato que RDS PostgreSQL 3 AZs.", "con": "Custo fixo provisionado mesmo com a instância ociosa." },
+      { "dimension": "Escala", "pro": "Até 15 read replicas e storage auto até 128 TB.", "con": "Escrita não escala horizontalmente (single writer)." }
+    ],
+    "relatedPatterns": ["event-sourcing", "cqrs", "database-per-service"],
+    "relatedTopics": ["cap-acid-base", "pacelc", "data-replication"],
+    "diagrams": [],
+    "sourceRefs": [
+      { "kind": "reference", "source": "AWS Documentation", "locator": "Aurora pricing", "note": "preço de referência db.r7g.xlarge, 3 AZs", "url": "https://aws.amazon.com/rds/aurora/pricing/" },
+      { "kind": "reference", "source": "AWS Documentation", "locator": "Graviton (ARM)", "note": "db.r7g (Graviton3) ~20% mais barato que x86", "url": "https://aws.amazon.com/ec2/graviton/" },
+      { "kind": "pdf", "source": "System Design Workbook", "locator": "CAP, ACID e BASE / PACELC", "note": "classificação CP / PC-EC" }
+    ]
+  },
+  {
+    "id": "aurora-serverless-v2",
+    "name": "Aurora Serverless v2",
+    "category": "Relacional",
+    "engine": "PostgreSQL/MySQL (auto-scale 0.5–128 ACU)",
+    "summary": "Aurora que escala a capacidade (ACUs) automaticamente com a demanda — ACID e JOINs como o Aurora provisionado, mas pagando pelo que usa. Ideal para serviço novo com carga variável.",
+    "priceMonthly": "$180–600",
+    "priceAnnual": "Variável (pago por ACU-hora)",
+    "capTheorem": "CP",
+    "pacelc": "PC/EC",
+    "failover": "<30s",
+    "azs": "3 AZs incluso",
+    "whenToUse": [
+      "Serviço de domínio novo (DDD) sem pico de carga conhecido.",
+      "Precisa de ACID + JOINs mas a carga é variável/intermitente.",
+      "Quer evitar provisionar para o pico o tempo todo."
+    ],
+    "whenToAvoid": [
+      "Carga estável e previsível 24/7 (Aurora provisionado sai mais barato).",
+      "Latência key-value de ponta única dígito de ms (prefira DynamoDB)."
+    ],
+    "tradeOffs": [
+      { "dimension": "Custo", "pro": "Escala 0.5–128 ACU; paga pelo uso real, bom para carga variável.", "con": "Em carga estável alta fica mais caro que provisionado." },
+      { "dimension": "Elasticidade", "pro": "Sobe/desce capacidade em segundos sem downtime.", "con": "Cold-ish em cargas com ociosidade longa (mínimo de ACU)." },
+      { "dimension": "Consistência", "pro": "Mesma garantia ACID/PC-EC do Aurora.", "con": "Continua single-writer para escrita." }
+    ],
+    "relatedPatterns": ["database-per-service", "cqrs"],
+    "relatedTopics": ["cap-acid-base", "microservices-monoliths"],
+    "diagrams": [],
+    "sourceRefs": [
+      { "kind": "reference", "source": "AWS Documentation", "locator": "Aurora Serverless v2", "note": "auto-scaling 0.5–128 ACU", "url": "https://aws.amazon.com/rds/aurora/serverless/" },
+      { "kind": "pdf", "source": "System Design Workbook", "locator": "Capacity & Queueing / PACELC", "note": "trade-off elasticidade vs custo" }
+    ]
+  },
+  {
+    "id": "rds-postgresql",
+    "name": "RDS PostgreSQL",
+    "category": "Relacional",
+    "engine": "PostgreSQL (Multi-AZ, JSONB + CTEs)",
+    "summary": "PostgreSQL gerenciado clássico em Multi-AZ. Motor relacional maduro com índices ricos e WAL para CDC; failover mais lento e custo de 3 AZs maior que o Aurora.",
+    "priceMonthly": "$872",
+    "priceAnnual": "~$10.464 (2 AZ)",
+    "capTheorem": "CP",
+    "pacelc": "PC/EC",
+    "failover": "60-120s",
+    "azs": "2 AZs (Multi-AZ)",
+    "whenToUse": [
+      "Event store append-only com UNIQUE(aggregate_id, version).",
+      "Outbox transacional e Transaction Log Tailing (WAL + Debezium).",
+      "Indexação rica (B-Tree, BRIN, GiST) e SQL completo."
+    ],
+    "whenToAvoid": [
+      "Requisito de 3 AZs com menor custo (Aurora é ~38% mais barato).",
+      "Failover sub-30s crítico (Multi-AZ leva 60–120s)."
+    ],
+    "tradeOffs": [
+      { "dimension": "Maturidade", "pro": "PostgreSQL puro: extensões, WAL, índices ricos.", "con": "Failover 60–120s e replicação leader-follower clássica." },
+      { "dimension": "Custo", "pro": "Previsível e simples (Multi-AZ 2 AZs).", "con": "3 AZs (~$1.308) fica caro vs Aurora 3 AZs incluso." },
+      { "dimension": "Escala", "pro": "Read replicas para leitura.", "con": "Escrita single-writer; sharding fica na aplicação." }
+    ],
+    "relatedPatterns": ["event-sourcing", "transactional-outbox", "saga", "transaction-log-tailing"],
+    "relatedTopics": ["cap-acid-base", "data-replication", "databases-indexing"],
+    "diagrams": [],
+    "sourceRefs": [
+      { "kind": "reference", "source": "AWS Documentation", "locator": "RDS PostgreSQL", "url": "https://aws.amazon.com/rds/postgresql/" },
+      { "kind": "reference", "source": "AWS Documentation", "locator": "RDS Multi-AZ", "note": "failover 60–120s; Multi-AZ 2 AZ vs cluster 3 AZ", "url": "https://aws.amazon.com/rds/features/multi-az/" },
+      { "kind": "repo", "source": "msc-transactions-api", "locator": "/", "note": "API transacional de referência (Postgres)" }
+    ]
+  },
+  {
+    "id": "rds-mysql",
+    "name": "RDS MySQL",
+    "category": "Relacional",
+    "engine": "MySQL (Multi-AZ, LOAD DATA)",
+    "summary": "MySQL gerenciado em Multi-AZ. Relacional consolidado, forte em ingestão em lote (LOAD DATA) e idempotência por chave única; mesmo perfil de failover/custo do RDS PostgreSQL.",
+    "priceMonthly": "$872",
+    "priceAnnual": "~$10.464 (2 AZ)",
+    "capTheorem": "CP",
+    "pacelc": "PC/EC",
+    "failover": "60-120s",
+    "azs": "2 AZs (Multi-AZ)",
+    "whenToUse": [
+      "Idempotent consumer com chave única (INSERT ... ON DUPLICATE KEY).",
+      "Carga inicial em lote massiva (LOAD DATA INFILE).",
+      "Stack já padronizada em MySQL."
+    ],
+    "whenToAvoid": [
+      "Recursos relacionais avançados (JSONB/CTEs ricos) — PostgreSQL é mais forte.",
+      "3 AZs de menor custo (prefira Aurora)."
+    ],
+    "tradeOffs": [
+      { "dimension": "Ingestão", "pro": "LOAD DATA muito rápido para carga inicial.", "con": "Recursos SQL avançados aquém do PostgreSQL." },
+      { "dimension": "Idempotência", "pro": "UNIQUE + ON DUPLICATE KEY simples e barato.", "con": "Isolation default Repeatable Read pode surpreender." },
+      { "dimension": "Custo", "pro": "Previsível (Multi-AZ 2 AZs).", "con": "3 AZs encarece vs Aurora." }
+    ],
+    "relatedPatterns": ["transactional-outbox", "idempotent-consumer"],
+    "relatedTopics": ["databases-indexing", "data-replication"],
+    "diagrams": [],
+    "sourceRefs": [
+      { "kind": "reference", "source": "AWS Documentation", "locator": "RDS MySQL", "url": "https://aws.amazon.com/rds/mysql/" },
+      { "kind": "reference", "source": "AWS Documentation", "locator": "RDS Multi-AZ", "url": "https://aws.amazon.com/rds/features/multi-az/" },
+      { "kind": "pdf", "source": "System Design Workbook", "locator": "Databases, Models & Indexing" }
+    ]
+  },
+  {
+    "id": "dynamodb",
+    "name": "DynamoDB",
+    "category": "NoSQL",
+    "engine": "Key-Value / Document (LSM, serverless)",
+    "summary": "NoSQL serverless key-value com latência <10ms, escala horizontal automática e SLA 99.999% (Global Tables). AP por natureza: alta disponibilidade e particionamento nativo, sem JOINs.",
+    "priceMonthly": "$21",
+    "priceAnnual": "~$252",
+    "capTheorem": "AP",
+    "pacelc": "PA/EL",
+    "failover": "Automático",
+    "azs": "3 AZs auto",
+    "whenToUse": [
+      "Read models / projeções CQRS com latência baixíssima.",
+      "Access patterns conhecidos (PK + GSI) e escala imprevisível.",
+      "Custo mínimo no baseline e disponibilidade máxima."
+    ],
+    "whenToAvoid": [
+      "Consultas ad-hoc, JOINs e relatórios relacionais.",
+      "Transações multi-item amplas (limite de 25 itens por transação)."
+    ],
+    "tradeOffs": [
+      { "dimension": "Latência", "pro": "<10ms p99 e escala horizontal praticamente infinita.", "con": "Sem JOINs; exige modelagem por access pattern (single-table)." },
+      { "dimension": "Custo", "pro": "$21/mês no baseline; paga por capacidade/uso.", "con": "Custo real sobe com storage, Streams, PITR e GSIs (~$30–50)." },
+      { "dimension": "Consistência", "pro": "AP: alta disponibilidade, multi-AZ automático.", "con": "Eventual por padrão; consistência forte custa throughput." }
+    ],
+    "relatedPatterns": ["cqrs", "idempotent-consumer"],
+    "relatedTopics": ["cap-acid-base", "pacelc", "sharding-partitioning"],
+    "diagrams": [],
+    "sourceRefs": [
+      { "kind": "reference", "source": "AWS Documentation", "locator": "DynamoDB pricing", "note": "baseline + DAX + Streams/PITR/GSI", "url": "https://aws.amazon.com/dynamodb/pricing/" },
+      { "kind": "pdf", "source": "System Design Workbook", "locator": "CAP, ACID e BASE / PACELC", "note": "classificação AP / PA-EL" }
+    ]
+  },
+  {
+    "id": "documentdb",
+    "name": "DocumentDB",
+    "category": "NoSQL",
+    "engine": "Document (compatível MongoDB 5.0)",
+    "summary": "Banco de documentos gerenciado compatível com MongoDB 5.0. Schema flexível para extratos/documentos; consistência mais forte que key-value puro, com réplicas configuradas manualmente.",
+    "priceMonthly": "$350–500",
+    "priceAnnual": "~$4.200–6.000",
+    "capTheorem": "CP",
+    "pacelc": "PC/EC",
+    "failover": "<30s",
+    "azs": "réplica manual",
+    "whenToUse": [
+      "Read model de documento (ex.: extrato) com schema flexível.",
+      "Migração de cargas MongoDB para um gerenciado na AWS.",
+      "$lookup ocasional e agregações sobre documentos."
+    ],
+    "whenToAvoid": [
+      "JOINs relacionais complexos (suporte limitado a $lookup).",
+      "Latência key-value de ms único em escala extrema (prefira DynamoDB)."
+    ],
+    "tradeOffs": [
+      { "dimension": "Flexibilidade", "pro": "Schema de documento flexível, compatível MongoDB 5.0.", "con": "$lookup limitado; não substitui JOINs relacionais." },
+      { "dimension": "Consistência", "pro": "CP/PC-EC, mais forte que key-value puro.", "con": "Réplicas configuradas manualmente (não tão automático quanto DynamoDB)." },
+      { "dimension": "Custo", "pro": "Gerenciado, sem operar MongoDB na mão.", "con": "$350–500/mês — mais caro que DynamoDB no baseline." }
+    ],
+    "relatedPatterns": ["cqrs", "domain-event"],
+    "relatedTopics": ["data-replication", "databases-indexing"],
+    "diagrams": [],
+    "sourceRefs": [
+      { "kind": "reference", "source": "AWS Documentation", "locator": "DocumentDB", "note": "compatível MongoDB 5.0", "url": "https://aws.amazon.com/documentdb/" },
+      { "kind": "repo", "source": "event-source-distributed-ledger", "locator": "/", "note": "MongoDB como read model de extrato no ledger de referência" }
+    ]
+  }
+]

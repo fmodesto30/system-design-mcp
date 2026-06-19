@@ -18,6 +18,7 @@ public record Topic(
         String interviewAngle,
         String example,
         List<String> diagrams,
+        DatabaseRecommendation databaseRecommendation,
         List<SourceRef> sourceRefs) {
 
     public Topic {

@@ -2,6 +2,7 @@ package io.systemdesign.lab.infrastructure.persistence;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.systemdesign.lab.domain.model.Database;
 import io.systemdesign.lab.domain.model.Diagram;
 import io.systemdesign.lab.domain.model.Evidence;
 import io.systemdesign.lab.domain.model.Flow;
@@ -51,6 +52,7 @@ public class JsonKnowledgeBaseAdapter implements KnowledgeBasePort {
     private List<Diagram> diagrams = List.of();
     private List<Evidence> evidence = List.of();
     private List<GlossaryEntry> aiGlossary = List.of();
+    private List<Database> databases = List.of();
 
     public JsonKnowledgeBaseAdapter(ResourceLoader resourceLoader,
                                     ObjectMapper objectMapper,
@@ -71,9 +73,10 @@ public class JsonKnowledgeBaseAdapter implements KnowledgeBasePort {
         diagrams = read("diagrams.json", new TypeReference<>() {});
         evidence = read("evidence.json", new TypeReference<>() {});
         aiGlossary = read("ai-agents-glossary.json", new TypeReference<>() {});
-        log.info("Knowledge base loaded: topics={} patterns={} flows={} questions={} diagrams={} evidence={} aiGlossary={}",
+        databases = read("databases.json", new TypeReference<>() {});
+        log.info("Knowledge base loaded: topics={} patterns={} flows={} questions={} diagrams={} evidence={} aiGlossary={} databases={}",
                 topics.size(), patterns.size(), flows.size(), interviewQuestions.size(),
-                diagrams.size(), evidence.size(), aiGlossary.size());
+                diagrams.size(), evidence.size(), aiGlossary.size(), databases.size());
     }
 
     private <T> List<T> read(String fileName, TypeReference<List<T>> type) {
@@ -126,5 +129,10 @@ public class JsonKnowledgeBaseAdapter implements KnowledgeBasePort {
     @Override
     public List<GlossaryEntry> aiGlossary() {
         return aiGlossary;
+    }
+
+    @Override
+    public List<Database> databases() {
+        return databases;
     }
 }

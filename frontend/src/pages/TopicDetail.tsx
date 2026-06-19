@@ -7,6 +7,7 @@ import { SourceRefList } from "../components/SourceRefList";
 import { TradeOffTable } from "../components/TradeOffTable";
 import { LinkChips } from "../components/Chips";
 import { DiagramEmbeds } from "../components/DiagramEmbeds";
+import { DbRecommendation } from "../components/DbRecommendation";
 
 export function TopicDetail() {
   const { id = "" } = useParams();
@@ -46,6 +47,7 @@ export function TopicDetail() {
 
           <LinkChips label="Tópicos relacionados" base="/topics" ids={t.relatedTopics} />
           <LinkChips label="Padrões relacionados" base="/patterns" ids={t.relatedPatterns} />
+          <DbRecommendation rec={t.databaseRecommendation} />
           <SourceRefList refs={t.sourceRefs} />
         </article>
       )}

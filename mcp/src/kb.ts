@@ -9,7 +9,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const KB_DIR = join(HERE, "..", "..", "knowledge-base");
 
 export const KINDS = [
-  "topics", "patterns", "flows", "interview-questions", "diagrams", "evidence", "ai-glossary",
+  "topics", "patterns", "flows", "interview-questions", "diagrams", "evidence", "ai-glossary", "databases",
 ] as const;
 export type Kind = (typeof KINDS)[number];
 
@@ -21,6 +21,7 @@ const FILES: Record<Kind, string> = {
   "diagrams": "diagrams.json",
   "evidence": "evidence.json",
   "ai-glossary": "ai-agents-glossary.json",
+  "databases": "databases.json",
 };
 
 const DESC: Record<Kind, string> = {
@@ -31,6 +32,7 @@ const DESC: Record<Kind, string> = {
   "diagrams": "Diagramas Mermaid de arquiteturas e fluxos",
   "evidence": "Matriz afirmacao -> evidencia -> fonte",
   "ai-glossary": "Glossario IA & Agentes (pra dev backend)",
+  "databases": "Bancos de dados AWS (Aurora, RDS, DynamoDB, DocumentDB) com preco, CAP/PACELC e trade-offs",
 };
 
 export type Item = Record<string, any>;

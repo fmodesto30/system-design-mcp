@@ -196,3 +196,46 @@ ol.steps .note { color: var(--muted); }
   .two-col, .vs { grid-template-columns: 1fr; }
   .vs-mid { display: none; }
 }
+
+/* Databases */
+.db-card-meta { display: flex; gap: 10px; align-items: center; margin-top: 10px; flex-wrap: wrap; font-size: 13px; }
+.db-price { font-weight: 700; color: var(--accent-2); }
+.db-specs { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; margin: 16px 0; }
+.db-spec { background: var(--bg-elev); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; display: flex; flex-direction: column; gap: 2px; }
+.db-spec-k { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; }
+.db-spec-v { font-weight: 600; }
+
+/* DB recommendation callout */
+.db-rec { background: var(--bg-elev); border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: 8px; padding: 2px 16px 12px; margin: 18px 0; }
+.db-rec h2 { border: none; margin-top: 14px; }
+.db-rec p { margin: 8px 0; }
+
+/* Database decision builder */
+.builder { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; margin-top: 18px; align-items: start; }
+.builder-group { margin-bottom: 18px; }
+.builder-group h3 { margin: 0 0 8px; }
+.button-group { display: flex; flex-wrap: wrap; gap: 8px; }
+.button-group button { background: var(--bg-elev); border: 1px solid var(--border); color: var(--muted); padding: 8px 14px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 500; transition: all 120ms; }
+.button-group button:hover { border-color: var(--accent); color: var(--text); }
+.button-group button.active { background: var(--accent); color: #0b0d11; border-color: var(--accent); }
+.builder-result { position: sticky; top: 20px; background: var(--bg-elev); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; }
+.builder-winner { border: 1px solid var(--border); border-left-width: 4px; border-radius: 8px; padding: 6px 14px 12px; margin-bottom: 14px; }
+.builder-winner h2 { border: none; margin: 6px 0 4px; }
+.builder-bars { display: flex; flex-direction: column; gap: 8px; }
+.bar-row { display: grid; grid-template-columns: 130px 1fr 26px; gap: 8px; align-items: center; font-size: 13px; }
+.bar-label { color: var(--text); }
+.bar-track { background: var(--bg-elev2); border-radius: 99px; height: 10px; overflow: hidden; }
+.bar-fill { height: 100%; border-radius: 99px; transition: width 220ms; }
+.bar-score { text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
+.builder-foot { margin-top: 14px; font-size: 12px; }
+
+/* External references (de-emphasized) */
+.sourcerefs-ext { margin-top: 8px; }
+.sourcerefs-ext summary { color: var(--muted); font-size: 12px; cursor: pointer; }
+.sourcerefs-ext summary:hover { color: var(--text); }
+.sourcerefs-ext-links { margin-top: 6px; }
+
+@media (max-width: 720px) {
+  .builder { grid-template-columns: 1fr; }
+  .builder-result { position: static; }
+}
