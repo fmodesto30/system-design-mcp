@@ -1,0 +1,147 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://system-design-specialist-lab/knowledge-base.schema.json",
+  "title": "System Design Specialist Lab — Knowledge Base contract v1",
+  "description": "Canonical shape of the local knowledge base. The Java BFF deserializes these files into records; the frontend renders them. Every factual item MUST carry at least one sourceRef.",
+  "$defs": {
+    "SourceRef": {
+      "type": "object",
+      "description": "A pointer to the evidence backing a claim. No claim without a source.",
+      "required": ["kind", "source", "locator"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "enum": ["pdf", "repo", "reference"], "description": "pdf=workbook; repo=one of the 3 GitHub repos; reference=microservices.io" },
+        "source": { "type": "string", "description": "e.g. 'System Design Workbook', 'msc-shard-router', 'event-source-distributed-ledger', 'microservices.io'" },
+        "locator": { "type": "string", "description": "pdf: 'p.420'; repo: 'pkg/hashring/'; reference: 'patterns/data/cqrs.html'" },
+        "note": { "type": "string", "description": "optional short quote or clarification" }
+      }
+    },
+    "TradeOff": {
+      "type": "object",
+      "required": ["dimension", "pro", "con"],
+      "additionalProperties": false,
+      "properties": {
+        "dimension": { "type": "string", "description": "e.g. 'Consistência', 'Latência de leitura', 'Complexidade operacional'" },
+        "pro": { "type": "string" },
+        "con": { "type": "string" }
+      }
+    },
+    "Topic": {
+      "type": "object",
+      "required": ["id", "title", "category", "summary", "detailedExplanation", "sourceRefs"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+        "title": { "type": "string" },
+        "category": { "type": "string", "description": "Fundamentos | Dados | Comunicação | Escalabilidade | Resiliência | Observabilidade | Entrega" },
+        "summary": { "type": "string", "description": "1-2 sentences" },
+        "detailedExplanation": { "type": "string", "description": "Markdown, didactic, in the author's own words" },
+        "relatedTopics": { "type": "array", "items": { "type": "string" } },
+        "relatedPatterns": { "type": "array", "items": { "type": "string" } },
+        "tradeOffs": { "type": "array", "items": { "$ref": "#/$defs/TradeOff" } },
+        "interviewAngle": { "type": "string", "description": "How this shows up in a System Design interview" },
+        "example": { "type": "string", "description": "Concrete example, ideally tied to the repos" },
+        "diagrams": { "type": "array", "items": { "type": "string" }, "description": "diagram ids" },
+        "sourceRefs": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/SourceRef" } }
+      }
+    },
+    "Pattern": {
+      "type": "object",
+      "required": ["id", "name", "category", "problem", "solution", "sourceRefs"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+        "name": { "type": "string" },
+        "category": { "type": "string", "description": "Data | Messaging | Reliability | API | Observability | Scalability" },
+        "problem": { "type": "string", "description": "The problem the pattern solves" },
+        "solution": { "type": "string", "description": "Short solution, own words (no copy of microservices.io)" },
+        "whenToUse": { "type": "array", "items": { "type": "string" } },
+        "whenToAvoid": { "type": "array", "items": { "type": "string" } },
+        "exampleFromRepo": { "type": "string", "description": "Where this pattern appears in the 3 repos" },
+        "financialExample": { "type": "string", "description": "Realistic financial-systems example" },
+        "tradeOffs": { "type": "array", "items": { "$ref": "#/$defs/TradeOff" } },
+        "relatedPatterns": { "type": "array", "items": { "type": "string" } },
+        "interviewAngle": { "type": "string" },
+        "diagrams": { "type": "array", "items": { "type": "string" } },
+        "sourceRefs": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/SourceRef" } }
+      }
+    },
+    "Flow": {
+      "type": "object",
+      "required": ["id", "title", "summary", "steps", "sourceRefs"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+        "title": { "type": "string" },
+        "summary": { "type": "string" },
+        "components": { "type": "array", "items": { "type": "string" } },
+        "steps": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["order", "actor", "action"],
+            "additionalProperties": false,
+            "properties": {
+              "order": { "type": "integer" },
+              "actor": { "type": "string" },
+              "action": { "type": "string" },
+              "note": { "type": "string" }
+            }
+          }
+        },
+        "relatedPatterns": { "type": "array", "items": { "type": "string" } },
+        "diagram": { "type": "string", "description": "diagram id" },
+        "sourceRefs": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/SourceRef" } }
+      }
+    },
+    "InterviewQuestion": {
+      "type": "object",
+      "required": ["id", "question", "shortAnswer", "detailedAnswer", "sourceRefs"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+        "question": { "type": "string" },
+        "difficulty": { "enum": ["junior", "pleno", "senior", "staff"] },
+        "shortAnswer": { "type": "string", "description": "The 30-second answer" },
+        "detailedAnswer": { "type": "string", "description": "Markdown deep dive" },
+        "mentalModel": { "type": "string", "description": "The 'desenho mental' to draw on the whiteboard" },
+        "patterns": { "type": "array", "items": { "type": "string" }, "description": "pattern ids involved" },
+        "risks": { "type": "array", "items": { "type": "string" } },
+        "tradeOffs": { "type": "array", "items": { "$ref": "#/$defs/TradeOff" } },
+        "repoExample": { "type": "string" },
+        "howToAnswerInInterview": { "type": "string", "description": "Meta-advice: how to structure the spoken answer" },
+        "relatedTopics": { "type": "array", "items": { "type": "string" } },
+        "diagrams": { "type": "array", "items": { "type": "string" } },
+        "sourceRefs": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/SourceRef" } }
+      }
+    },
+    "Diagram": {
+      "type": "object",
+      "required": ["id", "title", "mermaid", "sourceRefs"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "mermaid": { "type": "string", "description": "Valid Mermaid source" },
+        "relatedTopics": { "type": "array", "items": { "type": "string" } },
+        "relatedPatterns": { "type": "array", "items": { "type": "string" } },
+        "sourceRefs": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/SourceRef" } }
+      }
+    },
+    "Evidence": {
+      "type": "object",
+      "required": ["id", "claim", "evidence", "sourceRefs"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+        "claim": { "type": "string", "description": "An assertion the Lab makes" },
+        "evidence": { "type": "string", "description": "The supporting fact / quote / file" },
+        "relatedTopics": { "type": "array", "items": { "type": "string" } },
+        "relatedPatterns": { "type": "array", "items": { "type": "string" } },
+        "sourceRefs": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/SourceRef" } }
+      }
+    }
+  }
+}

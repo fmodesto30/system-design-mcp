@@ -1,0 +1,390 @@
+[
+  {
+    "id": "architecture-overview",
+    "title": "Visão geral da arquitetura de referência",
+    "description": "Panorama dos três sistemas de referência do autor: o shard-router com hashing consistente, a API transacional com controle forte de saldo/limite, e o ledger distribuído com Event Sourcing + CQRS sobre Kafka, Postgres, ScyllaDB e MongoDB.",
+    "mermaid": "flowchart TB\n  Client[Cliente]\n  subgraph Cellular[\"Roteamento celular - msc-shard-router\"]\n    Router[\"Shard Router - hashing consistente\"]\n    S1[Shard 1]\n    S2[Shard 2]\n    S3[Shard N]\n  end\n  subgraph Tx[\"Transacoes fortes - msc-transactions-api\"]\n    TxAPI[\"API de Transacoes - debito e credito\"]\n    PG1[(\"PostgreSQL - saldo e limite\")]\n    Redis[(\"Redis - cache e idempotencia\")]\n  end\n  subgraph Ledger[\"Ledger distribuido - event-source-distributed-ledger\"]\n    Kafka[\"Apache Kafka\"]\n    LedgerSvc[\"Ledger - Event Sourcing\"]\n    EventStore[(\"PostgreSQL - Event Store\")]\n    Scylla[(\"ScyllaDB - saldo read model\")]\n    Mongo[(\"MongoDB - extrato read model\")]\n  end\n  Client --> Router\n  Router -->|hash da chave| S1\n  Router --> S2\n  Router --> S3\n  Client --> TxAPI\n  TxAPI --> PG1\n  TxAPI --> Redis\n  Client -->|comando| Kafka\n  Kafka --> LedgerSvc\n  LedgerSvc -->|append apos commit| EventStore\n  LedgerSvc -->|confirmacoes| Kafka\n  Kafka --> Scylla\n  Kafka --> Mongo",
+    "relatedTopics": [
+      "cell-based",
+      "sharding-partitioning",
+      "cqrs",
+      "event-sourcing",
+      "messaging-streaming"
+    ],
+    "relatedPatterns": [
+      "consistent-hashing",
+      "database-per-service",
+      "cqrs",
+      "event-sourcing"
+    ],
+    "sourceRefs": [
+      {
+        "kind": "repo",
+        "source": "msc-shard-router",
+        "locator": "pkg/hashring/",
+        "note": "router com hashing consistente"
+      },
+      {
+        "kind": "repo",
+        "source": "msc-transactions-api",
+        "locator": "services/",
+        "note": "controle transacional de saldo e limite"
+      },
+      {
+        "kind": "repo",
+        "source": "event-source-distributed-ledger",
+        "locator": "ledger/main.go",
+        "note": "Event Sourcing + CQRS sobre Kafka"
+      }
+    ]
+  },
+  {
+    "id": "shard-router-flow",
+    "title": "Fluxo do Shard Router com hashing consistente",
+    "description": "Mostra como o roteador deriva o shard de destino aplicando hashing consistente sobre a sharding key, com replicas virtuais no anel e busca binaria O(log n), encaminhando a requisicao ao shard correto.",
+    "mermaid": "flowchart LR\n  Client[Cliente]\n  Router[\"Shard Router\"]\n  Hash[\"Hash da sharding key - SHA-512\"]\n  Ring[\"Anel de hash - replicas virtuais\"]\n  BSearch[\"Busca binaria O log n\"]\n  CB[\"Circuit Breaker\"]\n  S1[Shard 0]\n  S2[Shard 1]\n  S3[Shard N]\n  Client -->|\"header id_client\"| Router\n  Router --> Hash\n  Hash --> Ring\n  Ring --> BSearch\n  BSearch -->|shard deterministico| CB\n  CB -->|fechado| S1\n  CB -.->|aberto: falha rapida| Client\n  CB --> S2\n  CB --> S3",
+    "relatedTopics": [
+      "sharding-partitioning",
+      "load-balancing",
+      "resilience-patterns",
+      "cell-based"
+    ],
+    "relatedPatterns": [
+      "consistent-hashing",
+      "circuit-breaker",
+      "bulkhead"
+    ],
+    "sourceRefs": [
+      {
+        "kind": "repo",
+        "source": "msc-shard-router",
+        "locator": "pkg/hashring/",
+        "note": "SHA-512, replicas virtuais, busca binaria"
+      },
+      {
+        "kind": "repo",
+        "source": "msc-shard-router",
+        "locator": "pkg/sharding/",
+        "note": "CB_FAILURE_THRESHOLD, CB_OPEN_TIMEOUT_SEC"
+      }
+    ]
+  },
+  {
+    "id": "transactional-api-flow",
+    "title": "Fluxo da API transacional de debito e credito",
+    "description": "Demonstra o caminho de uma transacao financeira com controle transacional forte: checagem de idempotencia, abertura de transacao no Postgres, validacao de saldo e limite, e commit atomico com atualizacao de cache.",
+    "mermaid": "flowchart TB\n  Client[Cliente]\n  API[\"API de Transacoes - Fiber\"]\n  Redis[(\"Redis - idempotencia e cache\")]\n  PG[(\"PostgreSQL - saldo e limite\")]\n  Client -->|\"POST movimentacao\"| API\n  API -->|verifica id ja processado| Redis\n  Redis -->|novo| API\n  API -->|abre transacao SQL| PG\n  PG -->|le saldo e limite atuais| API\n  API -->|valida regras de negocio| API\n  API -->|persiste e commit atomico| PG\n  API -->|atualiza cache de saldo| Redis\n  API -->|resposta confirmada| Client\n  Redis -.->|duplicado: retorna mesmo resultado| Client",
+    "relatedTopics": [
+      "cap-acid-base",
+      "caching",
+      "databases-indexing",
+      "concurrency-parallelism"
+    ],
+    "relatedPatterns": [
+      "idempotent-consumer",
+      "database-per-service"
+    ],
+    "sourceRefs": [
+      {
+        "kind": "repo",
+        "source": "msc-transactions-api",
+        "locator": "services/",
+        "note": "controle transacional de saldo e limite, idempotencia, Redis"
+      }
+    ]
+  },
+  {
+    "id": "event-sourced-ledger-flow",
+    "title": "Fluxo do ledger com Event Sourcing e CQRS",
+    "description": "Mostra o caminho de escrita do ledger distribuido: comando via Kafka, persistencia atomica do evento no Event Store Postgres com versao por agregado, e publicacao pos-commit das confirmacoes que alimentam os read models em ScyllaDB e MongoDB.",
+    "mermaid": "flowchart TB\n  Client[Cliente]\n  KafkaIn[\"Kafka - conta_movimentacao\"]\n  Ledger[\"Ledger - consumidor e agregado\"]\n  EventStore[(\"PostgreSQL - Event Store append-only\")]\n  KafkaOut[\"Kafka - confirmacoes\"]\n  BalSvc[\"Ingestao de saldo\"]\n  Scylla[(\"ScyllaDB - saldo\")]\n  StmtSvc[\"Ingestao de extrato\"]\n  Mongo[(\"MongoDB - extrato\")]\n  BalAPI[\"balance-api\"]\n  StmtAPI[\"statement-api\"]\n  Client -->|comando| KafkaIn\n  KafkaIn --> Ledger\n  Ledger -->|\"append evento com versao - UNIQUE aggregate_id+version\"| EventStore\n  Ledger -->|publica apos commit| KafkaOut\n  KafkaOut --> BalSvc\n  BalSvc -->|\"LWT: INSERT IF NOT EXISTS\"| Scylla\n  KafkaOut --> StmtSvc\n  StmtSvc -->|ignora duplicate key 11000| Mongo\n  Client -->|le saldo| BalAPI\n  BalAPI --> Scylla\n  Client -->|le extrato| StmtAPI\n  StmtAPI --> Mongo",
+    "relatedTopics": [
+      "event-sourcing",
+      "cqrs",
+      "data-replication",
+      "messaging-streaming",
+      "cap-acid-base"
+    ],
+    "relatedPatterns": [
+      "event-sourcing",
+      "cqrs",
+      "domain-event",
+      "idempotent-consumer",
+      "transaction-log-tailing"
+    ],
+    "sourceRefs": [
+      {
+        "kind": "repo",
+        "source": "event-source-distributed-ledger",
+        "locator": "ledger/main.go",
+        "note": "transacao Postgres + publish pos-commit"
+      },
+      {
+        "kind": "repo",
+        "source": "event-source-distributed-ledger",
+        "locator": "balance/consumer.go",
+        "note": "read model ScyllaDB com LWT"
+      },
+      {
+        "kind": "repo",
+        "source": "event-source-distributed-ledger",
+        "locator": "statement/consumer.go",
+        "note": "read model MongoDB idempotente"
+      }
+    ]
+  },
+  {
+    "id": "cqrs",
+    "title": "CQRS - separacao de comando e consulta",
+    "description": "Ilustra a segregacao entre o lado de escrita (commands sobre o write model) e o lado de leitura (queries sobre read models otimizados), conectados de forma assincrona por eventos de dominio, com consistencia eventual entre eles.",
+    "mermaid": "flowchart LR\n  Client[Cliente]\n  subgraph Write[\"Lado de comando\"]\n    CmdAPI[\"Command API\"]\n    WriteModel[(\"Write model - normalizado\")]\n  end\n  Bus[\"Event Bus - eventos de dominio\"]\n  subgraph Read[\"Lado de consulta\"]\n    Projector[\"Projector - atualiza read models\"]\n    ReadModel[(\"Read model - desnormalizado\")]\n    QueryAPI[\"Query API\"]\n  end\n  Client -->|comando: muda estado| CmdAPI\n  CmdAPI --> WriteModel\n  WriteModel -->|publica evento| Bus\n  Bus --> Projector\n  Projector --> ReadModel\n  Client -->|consulta: le estado| QueryAPI\n  QueryAPI --> ReadModel",
+    "relatedTopics": [
+      "cqrs",
+      "data-replication",
+      "event-sourcing",
+      "performance-scalability"
+    ],
+    "relatedPatterns": [
+      "cqrs",
+      "domain-event",
+      "api-composition"
+    ],
+    "sourceRefs": [
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.420"
+      },
+      {
+        "kind": "reference",
+        "source": "microservices.io",
+        "locator": "patterns/data/cqrs.html"
+      },
+      {
+        "kind": "repo",
+        "source": "event-source-distributed-ledger",
+        "locator": "balance/",
+        "note": "read models separados do Event Store"
+      }
+    ]
+  },
+  {
+    "id": "account-creation",
+    "title": "Criacao de conta (sequencia)",
+    "description": "Sequencia da criacao de conta no ledger: o cliente envia o comando conta_criada via Kafka, o ledger valida e persiste o evento atomicamente, e apos o commit publica a confirmacao que materializa a conta nos read models.",
+    "mermaid": "sequenceDiagram\n  participant C as Cliente\n  participant K as Kafka conta_criada\n  participant L as Ledger\n  participant ES as Event Store Postgres\n  participant KO as Kafka confirmacoes\n  participant R as Read models\n  C->>K: comando conta_criada\n  K->>L: consome comando\n  L->>L: valida e cria agregado\n  L->>ES: append evento versao 1\n  ES-->>L: commit ok\n  L->>KO: ledger_nova_conta_registrada\n  KO->>R: materializa conta\n  R-->>C: conta disponivel para consulta",
+    "relatedTopics": [
+      "event-sourcing",
+      "cqrs",
+      "messaging-streaming",
+      "cap-acid-base"
+    ],
+    "relatedPatterns": [
+      "event-sourcing",
+      "domain-event",
+      "idempotent-consumer"
+    ],
+    "sourceRefs": [
+      {
+        "kind": "repo",
+        "source": "event-source-distributed-ledger",
+        "locator": "ledger/main.go",
+        "note": "conta_criada -> ledger_nova_conta_registrada"
+      }
+    ]
+  },
+  {
+    "id": "financial-movement",
+    "title": "Movimentacao financeira (sequencia)",
+    "description": "Sequencia de uma movimentacao de debito/credito no ledger: o ledger abre a transacao, persiste o evento com versao (lock otimista), recalcula o saldo, valida regras e, apos o commit, publica as confirmacoes que atualizam saldo e extrato.",
+    "mermaid": "sequenceDiagram\n  participant C as Cliente\n  participant K as Kafka conta_movimentacao\n  participant L as Ledger\n  participant ES as Event Store Postgres\n  participant KO as Kafka confirmacoes\n  participant SC as ScyllaDB saldo\n  participant MO as MongoDB extrato\n  C->>K: comando conta_movimentacao\n  K->>L: consome movimentacao\n  L->>ES: abre txn e append evento versao N\n  L->>L: le saldo e valida regras\n  L->>ES: atualiza read models internos e commit\n  ES-->>L: commit ok\n  L->>KO: ledger_saldo_atualizado\n  L->>KO: ledger_nova_transacao_confirmada\n  KO->>SC: aplica se versao maior LWT\n  KO->>MO: insere ignorando duplicado 11000",
+    "relatedTopics": [
+      "event-sourcing",
+      "cqrs",
+      "concurrency-parallelism",
+      "data-replication",
+      "messaging-streaming"
+    ],
+    "relatedPatterns": [
+      "event-sourcing",
+      "domain-event",
+      "idempotent-consumer",
+      "cqrs"
+    ],
+    "sourceRefs": [
+      {
+        "kind": "repo",
+        "source": "event-source-distributed-ledger",
+        "locator": "ledger/main.go",
+        "note": "lock otimista por versao, publish pos-commit"
+      },
+      {
+        "kind": "repo",
+        "source": "event-source-distributed-ledger",
+        "locator": "balance/consumer.go",
+        "note": "LWT UPDATE IF version < ?"
+      }
+    ]
+  },
+  {
+    "id": "read-model-update",
+    "title": "Atualizacao de read model (sequencia)",
+    "description": "Sequencia de como um consumidor de ingestao atualiza um read model a partir das confirmacoes do ledger, garantindo idempotencia e ordenacao: aplica apenas versoes maiores (LWT) ou ignora duplicatas por chave unica.",
+    "mermaid": "sequenceDiagram\n  participant KO as Kafka confirmacoes\n  participant ING as Servico de ingestao\n  participant SC as ScyllaDB saldo\n  participant MO as MongoDB extrato\n  KO->>ING: ledger_saldo_atualizado versao N\n  ING->>SC: UPDATE saldo IF version menor que N\n  alt versao maior aplicada\n    SC-->>ING: ok aplicado\n  else versao menor ou igual\n    SC-->>ING: descartado fora de ordem\n  end\n  KO->>ING: ledger_nova_transacao_confirmada\n  ING->>MO: INSERT movimentacao_id unico\n  alt chave nova\n    MO-->>ING: ok inserido\n  else duplicate key 11000\n    MO-->>ING: ignorado idempotente\n  end",
+    "relatedTopics": [
+      "cqrs",
+      "event-sourcing",
+      "data-replication",
+      "messaging-streaming"
+    ],
+    "relatedPatterns": [
+      "idempotent-consumer",
+      "cqrs",
+      "domain-event"
+    ],
+    "sourceRefs": [
+      {
+        "kind": "repo",
+        "source": "event-source-distributed-ledger",
+        "locator": "balance/consumer.go",
+        "note": "INSERT IF NOT EXISTS / UPDATE IF version <"
+      },
+      {
+        "kind": "repo",
+        "source": "event-source-distributed-ledger",
+        "locator": "statement/consumer.go",
+        "note": "movimentacao_id unico, ignora 11000"
+      }
+    ]
+  },
+  {
+    "id": "bff-knowledge-base",
+    "title": "BFF da base de conhecimento",
+    "description": "Mostra o BFF como aplicacao intermediaria especializada por canal que aplica o API Composition Pattern: recebe uma unica requisicao do frontend, orquestra chamadas a varios microsservicos, consolida e adapta o payload, e aciona fallbacks quando preciso.",
+    "mermaid": "flowchart TB\n  Web[\"Canal Web\"]\n  Mobile[\"Canal Mobile\"]\n  subgraph BFFs[\"Backends for Frontends\"]\n    BFFWeb[\"BFF Web\"]\n    BFFMob[\"BFF Mobile\"]\n  end\n  Topics[\"Servico de Topicos\"]\n  Patterns[\"Servico de Patterns\"]\n  Diagrams[\"Servico de Diagramas\"]\n  Cache[(\"Cache\")]\n  Web -->|\"1 requisicao\"| BFFWeb\n  Mobile -->|\"resposta enxuta\"| BFFMob\n  BFFWeb -->|composicao| Topics\n  BFFWeb --> Patterns\n  BFFWeb --> Diagrams\n  BFFWeb --> Cache\n  BFFMob --> Topics\n  BFFMob --> Patterns\n  BFFWeb -.->|fallback se servico cai| BFFWeb",
+    "relatedTopics": [
+      "bff",
+      "api-gateway",
+      "sync-communication",
+      "resilience-patterns",
+      "caching"
+    ],
+    "relatedPatterns": [
+      "backend-for-frontend",
+      "api-composition",
+      "api-gateway"
+    ],
+    "sourceRefs": [
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.203"
+      },
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.204"
+      },
+      {
+        "kind": "reference",
+        "source": "microservices.io",
+        "locator": "patterns/apigateway/backends-for-frontends.html"
+      }
+    ]
+  },
+  {
+    "id": "api-gateway-vs-bff",
+    "title": "API Gateway vs BFF",
+    "description": "Contrasta o API Gateway, componente unico de infraestrutura que oferece uma interface unificada para todos os clientes, com a abordagem BFF, em que cada canal tem um backend dedicado e especializado na jornada do seu publico.",
+    "mermaid": "flowchart TB\n  subgraph GW[\"Padrao API Gateway - interface unica\"]\n    direction TB\n    GClients[\"Web + Mobile + IoT\"]\n    Gateway[\"API Gateway unico\"]\n    GA[Servico A]\n    GB[Servico B]\n    GClients --> Gateway\n    Gateway --> GA\n    Gateway --> GB\n  end\n  subgraph BFF[\"Padrao BFF - backend por canal\"]\n    direction TB\n    BWeb[Web]\n    BMob[Mobile]\n    BIoT[IoT]\n    BFFWeb[\"BFF Web\"]\n    BFFMob[\"BFF Mobile\"]\n    BFFIoT[\"BFF IoT\"]\n    BA[Servico A]\n    BB[Servico B]\n    BWeb --> BFFWeb\n    BMob --> BFFMob\n    BIoT --> BFFIoT\n    BFFWeb --> BA\n    BFFWeb --> BB\n    BFFMob --> BA\n    BFFIoT --> BB\n  end",
+    "relatedTopics": [
+      "api-gateway",
+      "bff",
+      "sync-communication",
+      "microservices-monoliths"
+    ],
+    "relatedPatterns": [
+      "api-gateway",
+      "backend-for-frontend",
+      "api-composition"
+    ],
+    "sourceRefs": [
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.185"
+      },
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.202",
+        "note": "BFF e aplicacao, nao infra como o gateway"
+      },
+      {
+        "kind": "reference",
+        "source": "microservices.io",
+        "locator": "patterns/apigateway.html"
+      }
+    ]
+  },
+  {
+    "id": "saga-orchestration",
+    "title": "Saga orquestrada",
+    "description": "Mostra o modelo orquestrado da Saga: um orquestrador central atua como maquina de estado, envia comandos sequenciais aos microsservicos, aguarda respostas e dispara transacoes de compensacao em caso de falha. A complexidade fica concentrada no orquestrador.",
+    "mermaid": "flowchart TB\n  Start[\"Inicio do pedido\"]\n  Orch[\"Orquestrador - maquina de estado\"]\n  Pay[\"Pagamentos\"]\n  Stock[\"Estoque\"]\n  Ship[\"Entrega\"]\n  Done[\"Saga concluida\"]\n  Comp[\"Compensacao - desfaz passos\"]\n  Start --> Orch\n  Orch -->|comando 1| Pay\n  Pay -->|resposta ok| Orch\n  Orch -->|comando 2| Stock\n  Stock -->|resposta ok| Orch\n  Orch -->|comando 3| Ship\n  Ship -->|resposta ok| Orch\n  Orch --> Done\n  Stock -.->|falha| Orch\n  Orch -.->|aciona| Comp\n  Comp -.->|estorna pagamento| Pay",
+    "relatedTopics": [
+      "saga",
+      "messaging-streaming",
+      "resilience-patterns",
+      "microservices-monoliths"
+    ],
+    "relatedPatterns": [
+      "saga",
+      "domain-event",
+      "idempotent-consumer"
+    ],
+    "sourceRefs": [
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.456",
+        "note": "orquestrador central, command/response, maquina de estado"
+      },
+      {
+        "kind": "reference",
+        "source": "microservices.io",
+        "locator": "patterns/data/saga.html"
+      }
+    ]
+  },
+  {
+    "id": "saga-choreography",
+    "title": "Saga coreografada",
+    "description": "Mostra o modelo coreografado da Saga: sem orquestrador central, cada microsservico conhece o proximo passo e reage a eventos de dominio, propagando a transacao em malha. A compensacao tambem flui de volta pela cadeia de servicos.",
+    "mermaid": "flowchart LR\n  Start[\"Pedido criado\"]\n  Pay[\"Pagamentos\"]\n  Stock[\"Estoque\"]\n  Ship[\"Entrega\"]\n  Done[\"Pedido concluido\"]\n  Start -->|evento pedido_criado| Pay\n  Pay -->|evento pagamento_ok| Stock\n  Stock -->|evento estoque_reservado| Ship\n  Ship -->|evento entrega_agendada| Done\n  Stock -.->|evento estoque_falhou| Pay\n  Pay -.->|compensa: estorna| Start",
+    "relatedTopics": [
+      "saga",
+      "messaging-streaming",
+      "event-sourcing",
+      "resilience-patterns"
+    ],
+    "relatedPatterns": [
+      "saga",
+      "domain-event",
+      "idempotent-consumer"
+    ],
+    "sourceRefs": [
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.459",
+        "note": "cada servico conhece o seguinte e o anterior, malha de servicos"
+      },
+      {
+        "kind": "reference",
+        "source": "microservices.io",
+        "locator": "patterns/data/saga.html"
+      }
+    ]
+  }
+]

@@ -1,0 +1,34 @@
+spring:
+  application:
+    name: system-design-lab-bff
+
+server:
+  port: 8080
+
+# Where the BFF reads the knowledge base from.
+# Default: the classpath copy packaged from ../knowledge-base at build time.
+# Override with an absolute/relative directory to read live files without rebuilding:
+#   SDSL_KNOWLEDGE_BASE_DIR=../knowledge-base ./mvnw spring-boot:run
+sdsl:
+  knowledge-base:
+    # empty => load from classpath:knowledge-base/. Non-empty => load from that filesystem dir.
+    dir: ${SDSL_KNOWLEDGE_BASE_DIR:}
+  cors:
+    # Frontend dev origins allowed to call this BFF.
+    allowed-origins: http://localhost:5173,http://127.0.0.1:5173
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    tags:
+      application: ${spring.application.name}
+
+logging:
+  level:
+    io.systemdesign.lab: INFO

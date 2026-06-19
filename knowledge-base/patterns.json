@@ -1,0 +1,1434 @@
+[
+  {
+    "id": "database-per-service",
+    "name": "Database per Service",
+    "category": "Data",
+    "problem": "Quando vários microsserviços compartilham o mesmo banco de dados, o schema vira um acoplamento global: uma migração de um time quebra outro, ninguém consegue evoluir seu modelo de forma independente e o banco vira um ponto único de contenção e de falha. O isolamento de domínio prometido pelos microsserviços é desfeito na camada de dados.",
+    "solution": "Cada serviço é dono exclusivo do seu armazenamento — nenhum outro serviço lê ou escreve direto nas tabelas/coleções de outro. Acesso a dados de outro domínio só acontece pela API pública daquele serviço. Isso permite que cada serviço escolha a tecnologia que melhor serve seu padrão de acesso (relacional para escrita transacional, NoSQL para leitura desnormalizada) e evolua seu schema sem coordenação global.",
+    "whenToUse": [
+      "Arquitetura de microsserviços com fronteiras de domínio (bounded contexts) bem definidas",
+      "Times autônomos que precisam evoluir e fazer deploy de forma independente",
+      "Quando diferentes domínios têm necessidades de armazenamento distintas (poliglota: SQL para escrita, Scylla/Mongo para leitura)"
+    ],
+    "whenToAvoid": [
+      "Monolitos ou domínios pequenos onde a sobrecarga de consistência distribuída não se paga",
+      "Quando o negócio exige consistência forte e transações ACID atravessando vários agregados de forma síncrona e frequente",
+      "Sistemas onde a maioria das consultas precisa juntar dados de muitos serviços (a API composition fica cara e frágil)"
+    ],
+    "exampleFromRepo": "No `event-source-distributed-ledger` cada domínio tem sua própria store: o `ledger/` é dono do Event Store (Postgres, tabela `events`), `balance/` materializa saldo em ScyllaDB e `statement/` materializa extrato em MongoDB — nenhum lê o banco do outro, a propagação é por eventos Kafka. No `msc-transactions-api` o serviço de transações é dono do seu Postgres 16 + cache Redis.",
+    "financialExample": "Em um banco digital, o serviço de Contas é dono do cadastro e do limite, o serviço de Saldo materializa o saldo consolidado em um store rápido (ScyllaDB) e o serviço de Extrato guarda o histórico cronológico em MongoDB. Quando o app precisa mostrar saldo + extrato, ele consulta cada serviço pela API — nenhum acessa as tabelas do outro, então o time de Extrato pode trocar Mongo por outro store sem avisar o time de Saldo.",
+    "tradeOffs": [
+      {
+        "dimension": "Autonomia de times",
+        "pro": "Cada time evolui schema, escolhe tecnologia e faz deploy sem coordenar com os outros",
+        "con": "Some o JOIN entre domínios — relatórios cross-service exigem API composition ou um read model dedicado"
+      },
+      {
+        "dimension": "Consistência",
+        "pro": "Consistência forte garantida dentro do agregado/serviço",
+        "con": "Consistência entre serviços vira eventual, exigindo Saga/eventos para transações distribuídas"
+      },
+      {
+        "dimension": "Complexidade operacional",
+        "pro": "Falha de um banco não derruba os outros domínios (isolamento/bulkhead de dados)",
+        "con": "Mais instâncias de banco para operar, monitorar e fazer backup"
+      }
+    ],
+    "relatedPatterns": [
+      "saga",
+      "api-composition",
+      "cqrs",
+      "event-sourcing",
+      "transactional-outbox"
+    ],
+    "interviewAngle": "É a pré-condição que torna os outros padrões necessários: se você diz 'cada serviço tem seu banco', o entrevistador vai cobrar como você mantém consistência sem transação distribuída (Saga), como você consulta dados que cruzam serviços (API Composition / CQRS) e como você publica mudanças de forma atômica (Outbox). Saber articular essa cadeia de consequências é sinal de senioridade.",
+    "diagrams": [
+      "architecture-overview",
+      "event-sourced-ledger-flow"
+    ],
+    "sourceRefs": [
+      {
+        "kind": "reference",
+        "source": "microservices.io",
+        "locator": "patterns/data/database-per-service.html"
+      },
+      {
+        "kind": "repo",
+        "source": "event-source-distributed-ledger",
+        "locator": "ledger/, balance/, statement/",
+        "note": "Postgres Event Store, ScyllaDB para saldo, MongoDB para extrato — stores separados por domínio"
+      },
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.456",
+        "note": "Saga garante consistência entre serviços que seguem o modelo One Database Per Service"
+      }
+    ]
+  },
+  {
+    "id": "saga",
+    "name": "Saga",
+    "category": "Reliability",
+    "problem": "Uma transação de negócio precisa atravessar vários microsserviços, cada um com seu próprio banco (database-per-service), ou levar muito tempo (long-lived transaction). Não dá para usar uma transação ACID única nem segurar locks por horas/dias. Sem coordenação, o sistema pode ficar em estado parcial e inconsistente — por exemplo, pagamento debitado mas pedido não concluído.",
+    "solution": "Quebrar a transação longa em uma sequência de transações locais menores, cada uma confirmada (commit) no banco do seu próprio serviço. Para cada passo existe uma transação compensatória que o desfaz logicamente (estornar cobrança, liberar estoque). Se um passo falha, a saga aciona as compensações dos passos já confirmados, em ordem reversa, devolvendo o sistema a um estado consistente. A coordenação pode ser orquestrada (um componente central conhece todos os passos e mantém a máquina de estado) ou coreografada (cada serviço sabe quem é o próximo e emite um evento para acioná-lo).",
+    "whenToUse": [
+      "Transação de negócio que cruza vários serviços com bancos separados",
+      "Transações de longa duração (cobrança parcelada, fechamento de fatura, batch) onde locks síncronos não servem",
+      "Quando consistência eventual é aceitável e cada passo tem uma compensação de negócio bem definida"
+    ],
+    "whenToAvoid": [
+      "Quando uma transação ACID local resolve (tudo em um único serviço/banco)",
+      "Operações que não têm compensação clara (efeitos colaterais irreversíveis sem estorno possível)",
+      "Quando o negócio exige isolamento/atomicidade forte e imediata (a saga expõe estados intermediários parcialmente confirmados)"
+    ],
+    "exampleFromRepo": "O `msc-transactions-api` tem o modo `ENV=shadow` para cenários de rollback e mantém `services/` e `listeners/` que materializam ação + reversão de movimentações financeiras — a base de ação/compensação que uma saga exige. O `event-source-distributed-ledger` aplica regras de saldo/limite no `ledger/` e propaga confirmações por tópicos Kafka, o esqueleto event-driven sobre o qual uma saga coreografada roda.",
+    "financialExample": "Transferência entre bancos: (1) debita a conta de origem, (2) registra a transação no ledger, (3) credita a conta de destino, (4) notifica o cliente. Se o crédito no destino falha, a saga executa as compensações: estorna o débito da origem e marca a transação como cancelada. Cada passo tem seu par ação/compensação (`debitar()`/`estornarDebito()`, `creditar()`/`estornarCredito()`), e uma máquina de estado registra em que passo a transferência está para permitir retomada e auditoria.",
+    "tradeOffs": [
+      {
+        "dimension": "Consistência",
+        "pro": "Mantém consistência (eventual) e integridade entre serviços sem transação distribuída/2PC",
+        "con": "Expõe estados intermediários — há uma janela em que parte da transação está confirmada e parte não"
+      },
+      {
+        "dimension": "Performance vs confiabilidade",
+        "pro": "Sem locks síncronos prolongados (ao contrário do 2PC), escala melhor sob alta demanda",
+        "con": "O autor é explícito: a saga troca performance por confiabilidade; cada passo extra adiciona latência e custo"
+      },
+      {
+        "dimension": "Complexidade",
+        "pro": "Modela bem processos longos com retomada, supervisão e rastreabilidade via saga log",
+        "con": "Exige máquina de estado, compensações idempotentes e tratamento de dual-write (Outbox) para ser robusta"
+      }
+    ],
+    "relatedPatterns": [
+      "database-per-service",
+      "transactional-outbox",
+      "idempotent-consumer",
+      "domain-event",
+      "event-sourcing",
+      "circuit-breaker"
+    ],
+    "interviewAngle": "Pergunta clássica: 'como você garante consistência em uma transação que cruza N serviços sem 2PC?'. Respostas fortes desenham orquestração vs coreografia, citam compensações por passo e a máquina de estado, e antecipam o problema de dual-write (escrever no banco E publicar o evento atomicamente → Outbox) e a necessidade de idempotência para reinício seguro de saga. Mencionar a origem (Garcia-Molina & Salem, 1987, para Long-Lived Transactions) demonstra profundidade.",
+    "diagrams": [
+      "saga-orchestration",
+      "saga-choreography",
+      "financial-movement"
+    ],
+    "sourceRefs": [
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.449",
+        "note": "Capítulo Saga Pattern: orquestrado vs coreografado, máquina de estado, ação/compensação, dual write"
+      },
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.465",
+        "note": "Modelos de ação e compensação; handlers expostos em pares reservaPassagens()/liberaPassagens()"
+      },
+      {
+        "kind": "reference",
+        "source": "microservices.io",
+        "locator": "patterns/data/saga.html"
+      },
+      {
+        "kind": "repo",
+        "source": "msc-transactions-api",
+        "locator": "services/, listeners/, ENV=shadow",
+        "note": "ação/compensação e modo rollback em movimentações financeiras"
+      }
+    ]
+  },
+  {
+    "id": "api-composition",
+    "name": "API Composition",
+    "category": "API",
+    "problem": "Com database-per-service não existe mais um JOIN único entre domínios. Mas a interface (app, dashboard) frequentemente precisa de uma visão que junta dados de vários serviços — por exemplo, conta + saldo + últimas transações. Como montar essa resposta agregada sem acesso direto aos bancos uns dos outros?",
+    "solution": "Um componente compositor (tipicamente um API Gateway, um BFF ou um serviço dedicado) consulta cada serviço dono dos dados pela sua API, junta os resultados em memória e devolve a resposta agregada ao cliente. O JOIN que antes era no banco passa a ser feito na camada de aplicação, em runtime, a partir de chamadas paralelas aos serviços.",
+    "whenToUse": [
+      "Telas que precisam combinar dados de poucos serviços (2 a 4) com volume por requisição moderado",
+      "Como motor de leitura de um BFF que serve uma experiência específica (web, mobile)",
+      "Quando manter um read model materializado (CQRS) seria caro demais para a frequência/criticidade da consulta"
+    ],
+    "whenToAvoid": [
+      "Junções de grande volume ou que envolvem muitos serviços — o join em memória vira gargalo e amplifica latência (a resposta é tão lenta quanto o serviço mais lento)",
+      "Consultas com filtros/ordenação/paginação complexos sobre o conjunto agregado (difícil de fazer eficientemente in-memory)",
+      "Quando a leitura é tão crítica/frequente que compensa materializar um read model dedicado via CQRS"
+    ],
+    "exampleFromRepo": "No `event-source-distributed-ledger` as `balance-api/` e `statement-api/` expõem leituras de domínios separados (saldo em Scylla, extrato em Mongo); um BFF/gateway que quisesse devolver 'conta + saldo + extrato' numa só resposta faria API composition sobre essas APIs. O workbook documenta o API Composition Pattern especificamente como responsabilidade dos BFFs.",
+    "financialExample": "A tela inicial do app de banco precisa mostrar, de uma vez: dados da conta (serviço de Contas), saldo atual (serviço de Saldo/Scylla) e as 5 últimas transações (serviço de Extrato/Mongo). O BFF dispara as 3 chamadas em paralelo, agrega o resultado e devolve um único JSON pronto para a tela — o cliente não sabe que vieram de três serviços diferentes.",
+    "tradeOffs": [
+      {
+        "dimension": "Simplicidade",
+        "pro": "Não precisa manter um read model replicado nem pipeline de eventos — só chamar as APIs existentes",
+        "con": "A latência é a soma/maior das chamadas; um serviço lento degrada toda a composição"
+      },
+      {
+        "dimension": "Acoplamento",
+        "pro": "Mantém o database-per-service intacto (acesso só por API)",
+        "con": "O compositor passa a conhecer e depender de vários serviços; disponibilidade da resposta = produto das disponibilidades"
+      },
+      {
+        "dimension": "Escala de leitura",
+        "pro": "Sem custo de manter cópias sincronizadas dos dados",
+        "con": "Não escala para grandes volumes nem para joins/filtros pesados — aí CQRS com read model vence"
+      }
+    ],
+    "relatedPatterns": [
+      "database-per-service",
+      "cqrs",
+      "api-gateway",
+      "backend-for-frontend"
+    ],
+    "interviewAngle": "Aparece como a alternativa mais simples ao CQRS para resolver 'como faço uma query que cruza serviços'. O entrevistador quer ouvir o trade-off: API Composition é barato e direto mas não escala para joins grandes/críticos; CQRS materializa um read model (mais infra, consistência eventual) mas escala leitura. Saber quando cada um se aplica é o ponto.",
+    "diagrams": [
+      "bff-knowledge-base",
+      "api-gateway-vs-bff"
+    ],
+    "sourceRefs": [
+      {
+        "kind": "reference",
+        "source": "microservices.io",
+        "locator": "patterns/data/api-composition.html"
+      },
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.203",
+        "note": "API Composition Pattern nos BFFs"
+      },
+      {
+        "kind": "repo",
+        "source": "event-source-distributed-ledger",
+        "locator": "balance-api/, statement-api/",
+        "note": "APIs de leitura de domínios separados que um compositor agregaria"
+      }
+    ]
+  },
+  {
+    "id": "cqrs",
+    "name": "CQRS (Command Query Responsibility Segregation)",
+    "category": "Data",
+    "problem": "Um mesmo modelo de dados serve mal a escrita e a leitura ao mesmo tempo. A escrita quer normalização, transações ACID e regras de negócio rígidas para garantir consistência; a leitura quer dados desnormalizados, prontos para a tela, com baixa latência. Forçar os dois no mesmo modelo gera JOINs caros nas consultas e contenção entre o caminho de escrita e o de leitura, que não escalam de forma independente.",
+    "solution": "Separar fisicamente as responsabilidades de comando (escrita) e query (leitura) em modelos — e frequentemente bancos — distintos. O lado de comando usa um modelo normalizado, rico em regras, com transações ACID. O lado de query usa um ou mais read models desnormalizados/materializados (SQL desnormalizado, NoSQL, cache em memória) otimizados para o padrão de leitura. Os dois lados são mantidos em sincronia por replicação/eventos, podendo escalar de forma independente.",
+    "whenToUse": [
+      "Cargas com leitura e escrita muito assimétricas (muito mais leitura, ou padrões de acesso muito diferentes)",
+      "Quando a consulta precisa de uma visão desnormalizada que sairia cara via JOINs sobre o modelo normalizado",
+      "Combinado com Event Sourcing: projections derivam read models a partir do log de eventos"
+    ],
+    "whenToAvoid": [
+      "Domínios simples/CRUD onde um único modelo atende bem (o overhead de dois modelos não se paga)",
+      "Quando a equipe não tolera a consistência eventual entre escrita e leitura que a sincronização assíncrona introduz",
+      "Quando a leitura precisa enxergar a escrita imediatamente (read-your-writes forte) sem complexidade extra"
+    ],
+    "exampleFromRepo": "O `event-source-distributed-ledger` é CQRS de livro: o lado de comando é o Event Store em Postgres (escrita autoritativa, transacional), e os read models são derivados por projections — saldo em ScyllaDB (`balance/`) e extrato em MongoDB (`statement/`) — consultados pelas `balance-api/` e `statement-api/`. O `msc-transactions-api` usa Postgres para escrita transacional e Redis como camada de leitura rápida.",
+    "financialExample": "No ledger bancário, debitar/creditar é um comando: grava o evento de movimentação em Postgres com ACID e validação de saldo/limite. Já 'mostrar o saldo' é uma query: lê o saldo já consolidado em ScyllaDB (read model materializado), sem recalcular nada. E 'mostrar o extrato' lê o histórico cronológico do MongoDB. Escrita e leitura escalam separado — picos de consulta de saldo não competem com o caminho transacional.",
+    "tradeOffs": [
+      {
+        "dimension": "Performance/escala",
+        "pro": "Escrita e leitura escalam independentemente; read models otimizados respondem rápido sem JOINs",
+        "con": "Mais infraestrutura: múltiplos stores, pipeline de sincronização e processos de projection para operar"
+      },
+      {
+        "dimension": "Consistência",
+        "pro": "Escrita mantém consistência forte (ACID) onde importa",
+        "con": "Read models ficam eventualmente consistentes — há lag entre o comando e a atualização da query"
+      },
+      {
+        "dimension": "Complexidade de domínio",
+        "pro": "Modelo de escrita rico e limpo; modelo de leitura desnormalizado e simples",
+        "con": "Duplicação de modelos e risco de divergência/dual-write — exige Outbox ou eventos para sincronizar com segurança"
+      }
+    ],
+    "relatedPatterns": [
+      "event-sourcing",
+      "transactional-outbox",
+      "domain-event",
+      "database-per-service",
+      "api-composition"
+    ],
+    "interviewAngle": "Mostre que CQRS é um espectro: do mais simples (uma view materializada SQL desnormalizada no mesmo banco) ao mais complexo (bancos separados, NoSQL, projections sobre Event Sourcing). O entrevistador testa se você reconhece o custo — consistência eventual e dual-write — e como mitiga (Transactional Outbox para propagar a mudança atomicamente). Errar é apresentar CQRS como bala de prata sem citar o lag de leitura.",
+    "diagrams": [
+      "cqrs",
+      "read-model-update",
+      "event-sourced-ledger-flow"
+    ],
+    "sourceRefs": [
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.420",
+        "note": "Capítulo CQRS: separação comando/query, modelos de implementação, view materializada, NoSQL, CQRS distribuído"
+      },
+      {
+        "kind": "reference",
+        "source": "microservices.io",
+        "locator": "patterns/data/cqrs.html"
+      },
+      {
+        "kind": "repo",
+        "source": "event-source-distributed-ledger",
+        "locator": "balance/ (Scylla), statement/ (Mongo), ledger/ (Postgres Event Store)",
+        "note": "read models materializados via projections a partir do Event Store"
+      }
+    ]
+  },
+  {
+    "id": "domain-event",
+    "name": "Domain Event",
+    "category": "Messaging",
+    "problem": "Quando um serviço muda o estado de um agregado (com database-per-service), outros serviços que precisam reagir a essa mudança não têm como saber — não podem ler o banco do dono. Acoplar a notificação via chamada síncrona direta cria dependência forte e blast radius (se o consumidor está fora, a escrita falha junto). Falta um meio desacoplado de avisar 'algo de negócio aconteceu aqui'.",
+    "solution": "O agregado emite um evento de domínio — um fato imutável, nomeado no passado ('ContaCriada', 'SaldoAtualizado', 'TransacaoConfirmada') — sempre que algo relevante de negócio acontece. O evento é publicado em um Event Bus/broker e consumido de forma assíncrona por quem se interessa. O produtor não conhece os consumidores; novos reagentes podem ser adicionados sem tocar no produtor.",
+    "whenToUse": [
+      "Propagar mudanças de estado entre bounded contexts/serviços de forma desacoplada",
+      "Disparar reações em cadeia (atualizar read models, sagas coreografadas, notificações, analytics)",
+      "Como unidade de registro em Event Sourcing — o evento de domínio é o que se persiste no Event Store"
+    ],
+    "whenToAvoid": [
+      "Quando o consumidor precisa de resposta síncrona imediata (aí é RPC/REST, não evento)",
+      "Domínios simples onde a indireção do broker adiciona complexidade sem ganho",
+      "Quando você não consegue garantir publicação atômica com a escrita (sem Outbox, vira dual-write inconsistente)"
+    ],
+    "exampleFromRepo": "O `event-source-distributed-ledger` é movido a eventos de domínio nomeados: comandos `conta_criada` e `conta_movimentacao` chegam por Kafka; após o commit no Event Store, o ledger publica confirmações `ledger_nova_conta_registrada`, `ledger_nova_transacao_confirmada` (→ Mongo) e `ledger_saldo_atualizado` (→ Scylla). Cada evento é um fato de negócio que dispara a atualização de um read model.",
+    "financialExample": "Quando o ledger confirma uma movimentação, ele emite o evento de domínio 'SaldoAtualizado(conta, novoSaldo, version)'. O serviço de Saldo consome e atualiza o ScyllaDB; o serviço de Extrato consome e insere a linha no MongoDB; um serviço de antifraude consome o mesmo evento para checar padrões. O ledger não sabe que esses três existem — bastou publicar o fato.",
+    "tradeOffs": [
+      {
+        "dimension": "Acoplamento",
+        "pro": "Produtor e consumidores desacoplados — adicionar reagentes não muda o produtor",
+        "con": "O fluxo de negócio fica espalhado e implícito no broker, mais difícil de seguir e debugar de ponta a ponta"
+      },
+      {
+        "dimension": "Resiliência",
+        "pro": "Consumidor fora do ar não derruba a escrita; o evento espera no broker",
+        "con": "Consistência vira eventual; consumidor precisa ser idempotente para tolerar entrega at-least-once"
+      },
+      {
+        "dimension": "Atomicidade",
+        "pro": "Modela bem 'algo aconteceu' como fato imutável reutilizável",
+        "con": "Publicar o evento + gravar o estado atomicamente exige Outbox/Event Sourcing — senão é dual-write"
+      }
+    ],
+    "relatedPatterns": [
+      "event-sourcing",
+      "transactional-outbox",
+      "cqrs",
+      "saga",
+      "idempotent-consumer"
+    ],
+    "interviewAngle": "É o tijolo que conecta event sourcing, CQRS e saga coreografada. Bons candidatos distinguem evento de domínio (fato passado, sem destinatário) de comando (imperativo, com destinatário) e mensagem. E sempre amarram com a pergunta de atomicidade: 'como você garante que o evento só sai se a escrita commitou?' → Transactional Outbox ou publicação pós-commit no Event Sourcing.",
+    "diagrams": [
+      "event-sourced-ledger-flow",
+      "read-model-update",
+      "account-creation"
+    ],
+    "sourceRefs": [
+      {
+        "kind": "reference",
+        "source": "microservices.io",
+        "locator": "patterns/data/domain-event.html"
+      },
+      {
+        "kind": "repo",
+        "source": "event-source-distributed-ledger",
+        "locator": "Kafka topics: conta_criada, conta_movimentacao, ledger_saldo_atualizado",
+        "note": "eventos de domínio nomeados no passado que disparam read models"
+      },
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.480",
+        "note": "Event Bus e Publishers: eventos de domínio publicados de forma desacoplada para consumidores interessados"
+      }
+    ]
+  },
+  {
+    "id": "event-sourcing",
+    "name": "Event Sourcing",
+    "category": "Data",
+    "problem": "A persistência tradicional (state mutation) sobrescreve o estado a cada INSERT/UPDATE/DELETE, respondendo 'como a entidade está agora', mas apagando 'como ela chegou aqui'. Em domínios que mudam muito e exigem auditoria, reconstrução de estados e reatividade (pagamentos, saldos, ledgers), perder o histórico custa caro: não dá para auditar, reprocessar nem recompor o estado de forma confiável.",
+    "solution": "Em vez de guardar o estado atual, guardar a sequência ordenada e imutável de eventos que o produziram, em um Event Store append-only tratado como ledger. O estado atual é derivado reaplicando os eventos do stream do agregado, na ordem. Cada agregado tem seu stream; cada evento carrega id único e version incremental. Snapshots periódicos aceleram a re-hidratação, e projections constroem read models (CQRS) para leitura otimizada.",
+    "whenToUse": [
+      "Domínios que exigem auditoria completa e trilha imutável (financeiro, ledger, compliance)",
+      "Quando reconstruir o estado em qualquer ponto do tempo ou reprocessar a história tem valor de negócio",
+      "Sistemas reativos/event-driven que já propagam eventos e precisam de uma golden source de fatos"
+    ],
+    "whenToAvoid": [
+      "CRUD simples onde só interessa o estado atual — o overhead de eventos, projections e versionamento não se paga",
+      "Times sem maturidade para lidar com a complexidade alta (re-hidratação, snapshot, LWW, idempotência) — o próprio autor alerta que a complexidade sistêmica é alta",
+      "Quando a leitura precisa ser barata e imediata sem investir em read models materializados"
+    ],
+    "exampleFromRepo": "O `event-source-distributed-ledger` implementa Event Sourcing no `ledger/`: a tabela `events` em Postgres é append-only, com `aggregate_id` (UUID), `version` (INT), `event_type` e `event_data` (JSONB), e a constraint `UNIQUE(aggregate_id, version)` garante ordenação por agregado como fonte da verdade. O estado de saldo é derivado reaplicando os eventos; read models (Scylla/Mongo) são projeções desses fatos.",
+    "financialExample": "A conta bancária não guarda um campo 'saldo = 1500'; guarda os eventos 'ContaCriada', 'Credito(1000)', 'Credito(800)', 'Debito(300)'. O saldo atual (1500) é derivado reaplicando-os. Para uma conta com milhões de lançamentos, um snapshot a cada 10.000 eventos guarda o saldo consolidado e o índice do último evento aplicado — re-hidratar parte do snapshot e aplica só os eventos posteriores, evitando varrer o histórico inteiro.",
+    "tradeOffs": [
+      {
+        "dimension": "Auditabilidade",
+        "pro": "Histórico completo, imutável e reproduzível — fonte de verdade verificável, ideal para financeiro",
+        "con": "O Event Store cresce indefinidamente (append-only); leitura do estado exige reaplicar/derivar"
+      },
+      {
+        "dimension": "Leitura",
+        "pro": "Permite reconstruir qualquer estado no tempo e reprocessar projeções a qualquer momento",
+        "con": "Recuperar o estado atual é mais caro que ler uma linha — precisa de snapshots + read models para escalar"
+      },
+      {
+        "dimension": "Consistência/ordem",
+        "pro": "version por agregado + UNIQUE(aggregate_id, version) garantem ordenação local determinística",
+        "con": "Ordem global no Event Bus não é garantida → consumidores precisam de Last-Write-Wins e idempotência"
+      }
+    ],
+    "relatedPatterns": [
+      "cqrs",
+      "domain-event",
+      "idempotent-consumer",
+      "transactional-outbox",
+      "saga",
+      "database-per-service"
+    ],
+    "interviewAngle": "O entrevistador quer ver que você conhece os componentes (Event Store, Event Bus, Projections, Read Models, Snapshot, Rehydration) e os problemas reais: ordem só local por agregado (não global), por isso version/timestamp + LWW; entrega at-least-once, por isso idempotência nos consumidores; estado caro de ler, por isso snapshot + CQRS. Citar a tabela `events` com `UNIQUE(aggregate_id, version)` e os LWTs do Scylla mostra que você já viu uma implementação real.",
+    "diagrams": [
+      "event-sourced-ledger-flow",
+      "cqrs",
+      "financial-movement",
+      "account-creation"
+    ],
+    "sourceRefs": [
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.475",
+        "note": "Capítulo Event Sourcing: Event Store, Event Bus, Projections, Read Models, Snapshotting, Rehydration, LWW, idempotência"
+      },
+      {
+        "kind": "reference",
+        "source": "microservices.io",
+        "locator": "patterns/data/event-sourcing.html"
+      },
+      {
+        "kind": "repo",
+        "source": "event-source-distributed-ledger",
+        "locator": "ledger/, tabela events com UNIQUE(aggregate_id, version)",
+        "note": "Event Store append-only em Postgres; versão por agregado como source of truth"
+      }
+    ]
+  },
+  {
+    "id": "transactional-outbox",
+    "name": "Transactional Outbox",
+    "category": "Messaging",
+    "problem": "Um serviço precisa, na mesma operação, gravar o estado no banco E publicar um evento no broker. Como são dois sistemas distintos, não há transação que cubra ambos: se grava no banco mas o broker está fora, o evento se perde; se publica o evento mas a transação do banco aborta, o evento mente. Esse é o problema de dual-write, que deixa o sistema inconsistente.",
+    "solution": "Gravar o evento em uma tabela outbox dentro da mesma transação ACID que persiste a mudança de estado — assim ou os dois commitam, ou nenhum. Um processo relay (message relay) lê a outbox de forma sequencial, publica os eventos no broker e só então os marca como publicados (ou os remove), com tratamento de erro/retentativa. A leitura da outbox pode ser por polling (Polling Publisher) ou por leitura do log de transações do banco (Transaction Log Tailing / CDC).",
+    "whenToUse": [
+      "Sempre que precisar publicar um evento de forma atômica com uma escrita em banco ACID (CQRS, saga, domain events)",
+      "Para blindar contra dual-write em indisponibilidades totais ou parciais do broker",
+      "Quando o banco transacional já é SQL e suporta a tabela outbox na mesma transação"
+    ],
+    "whenToAvoid": [
+      "Cargas extremas de escrita onde a leitura/escrita constante da tabela outbox vira gargalo no banco (o autor alerta para isso)",
+      "Quando o store não suporta transação que cubra estado + outbox juntos",
+      "Quando o Event Sourcing já resolve: o próprio Event Store é a 'outbox', com publicação pós-commit"
+    ],
+    "exampleFromRepo": "O `event-source-distributed-ledger` aplica o espírito do Outbox sem tabela dedicada: o evento é persistido no Event Store (Postgres) dentro da transação e a publicação no Kafka é pós-commit, evitando dual-write — exatamente a garantia que o Outbox busca. No `msc-transactions-api`, `routines/` (processos de background) é o lugar natural de um message relay varrendo eventos pendentes.",
+    "financialExample": "Ao confirmar uma transferência, o serviço grava na mesma transação SQL: (1) a linha da transação na tabela principal e (2) o evento 'TransacaoConfirmada' na tabela outbox. Commit atômico. Um relay lê a outbox, publica 'TransacaoConfirmada' no Kafka para os serviços de Saldo e Extrato, e marca a linha como `processed=true`. Se o Kafka estiver fora, o evento fica na outbox e é republicado depois — nunca se perde nem é publicado sem a escrita ter commitado.",
+    "tradeOffs": [
+      {
+        "dimension": "Consistência",
+        "pro": "Elimina o dual-write: estado e evento commitam juntos, atomicamente",
+        "con": "Garante apenas entrega at-least-once — o consumidor ainda precisa ser idempotente (pode receber duplicado)"
+      },
+      {
+        "dimension": "Custo no banco",
+        "pro": "Usa a transação ACID que já existe, sem coordenador distribuído (2PC)",
+        "con": "Leitura/escrita constante da tabela outbox adiciona carga e pode virar gargalo em alta escala"
+      },
+      {
+        "dimension": "Latência",
+        "pro": "Desacopla a publicação do caminho de escrita (resiliente a broker fora)",
+        "con": "Introduz lag entre o commit e a publicação efetiva do evento (depende do relay)"
+      }
+    ],
+    "relatedPatterns": [
+      "polling-publisher",
+      "transaction-log-tailing",
+      "domain-event",
+      "cqrs",
+      "saga",
+      "idempotent-consumer",
+      "event-sourcing"
+    ],
+    "interviewAngle": "É a resposta canônica para 'como você publica um evento e grava no banco sem dual-write?'. Diga: tabela outbox na mesma transação + relay. O entrevistador então cobra COMO o relay lê a outbox → Polling Publisher (simples, mais carga) vs Transaction Log Tailing/CDC (eficiente, infra a mais). E fecha lembrando que Outbox dá at-least-once, então o consumidor tem que ser idempotente.",
+    "diagrams": [
+      "transactional-api-flow",
+      "read-model-update",
+      "cqrs"
+    ],
+    "sourceRefs": [
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.445",
+        "note": "Transactional Outbox no contexto de CQRS: tabela outbox, message relay, gestão de erros; alternativa ao dual-write"
+      },
+      {
+        "kind": "reference",
+        "source": "microservices.io",
+        "locator": "patterns/data/transactional-outbox.html"
+      },
+      {
+        "kind": "repo",
+        "source": "event-source-distributed-ledger",
+        "locator": "ledger/ — publicação pós-commit no Kafka",
+        "note": "garante atomicidade estado+evento, mesma intenção do Outbox"
+      }
+    ]
+  },
+  {
+    "id": "polling-publisher",
+    "name": "Polling Publisher",
+    "category": "Messaging",
+    "problem": "Tendo gravado eventos em uma tabela outbox, é preciso publicá-los no broker. Como detectar e levar para o broker os eventos ainda não publicados, de forma simples e sem depender de recursos especiais do banco?",
+    "solution": "Um processo relay consulta periodicamente (polling) a tabela outbox em busca de registros não publicados (ex.: `WHERE processed = false ORDER BY id`), publica cada um no broker na ordem e os marca como publicados (ou remove). É a forma mais simples de implementar o relay do Transactional Outbox, funcionando em qualquer banco SQL sem precisar de CDC.",
+    "whenToUse": [
+      "Implementação simples do message relay quando não se quer/pode usar CDC",
+      "Volumes de eventos baixos a moderados, onde o intervalo de polling atende ao SLA de latência",
+      "Bancos que não expõem o log de transações de forma acessível"
+    ],
+    "whenToAvoid": [
+      "Alta vazão de eventos — o polling frequente sobre a outbox gera carga constante e pode virar gargalo",
+      "Requisitos de latência muito baixa (o intervalo de polling adiciona atraso inerente)",
+      "Quando Transaction Log Tailing/CDC está disponível e a escala justifica a abordagem mais eficiente"
+    ],
+    "exampleFromRepo": "No `msc-transactions-api`, `routines/` (processos de background) é exatamente onde um polling publisher viveria, varrendo periodicamente eventos/movimentações pendentes para publicar. O workbook descreve esse 'processo de publicação assíncrono que periodicamente lê eventos da tabela de outbox' — a definição de polling publisher.",
+    "financialExample": "Um job roda a cada 500 ms: `SELECT * FROM outbox WHERE processed = false ORDER BY id LIMIT 100`. Para cada evento 'TransacaoConfirmada', publica no Kafka e dá `UPDATE outbox SET processed = true WHERE id = ?`. Em um banco de baixo/médio volume de transações é simples e robusto; num pico de milhões de transações/min, esse polling vira pressão extra sobre o Postgres.",
+    "tradeOffs": [
+      {
+        "dimension": "Simplicidade",
+        "pro": "Trivial de implementar e portável — só SQL, sem CDC nem ferramenta externa",
+        "con": "O polling constante adiciona carga de leitura ao banco mesmo quando não há eventos novos"
+      },
+      {
+        "dimension": "Latência",
+        "pro": "Intervalo configurável conforme a necessidade",
+        "con": "Há sempre um atraso de até um intervalo de polling entre o commit e a publicação"
+      },
+      {
+        "dimension": "Escala",
+        "pro": "Atende bem volumes baixos/médios sem infraestrutura extra",
+        "con": "Não escala para alta vazão tão bem quanto o log tailing/CDC"
+      }
+    ],
+    "relatedPatterns": [
+      "transactional-outbox",
+      "transaction-log-tailing",
+      "domain-event",
+      "idempotent-consumer"
+    ],
+    "interviewAngle": "É a metade 'simples' do par com Transaction Log Tailing. Quando o entrevistador pergunta como o relay do Outbox lê os eventos, comece por Polling Publisher (fácil, mas custa CPU/IO no banco e tem latência de intervalo) e contraste com CDC (eficiente, escala, mas exige acesso ao log de transações). Saber escolher por volume/latência é o que importa.",
+    "diagrams": [
+      "transactional-api-flow",
+      "read-model-update"
+    ],
+    "sourceRefs": [
+      {
+        "kind": "reference",
+        "source": "microservices.io",
+        "locator": "patterns/data/polling-publisher.html"
+      },
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.445",
+        "note": "processo de publicação assíncrono que periodicamente lê eventos da outbox e os marca como publicados"
+      },
+      {
+        "kind": "repo",
+        "source": "msc-transactions-api",
+        "locator": "routines/",
+        "note": "processos de background, lugar natural de um polling relay"
+      }
+    ]
+  },
+  {
+    "id": "transaction-log-tailing",
+    "name": "Transaction Log Tailing",
+    "category": "Messaging",
+    "problem": "O polling da outbox adiciona carga constante ao banco e tem latência de intervalo. Como publicar os eventos da outbox (ou as próprias mudanças de estado) de forma eficiente e com baixa latência, sem ficar consultando a tabela repetidamente?",
+    "solution": "Em vez de consultar a tabela, ler o log de transações (commit log / WAL) do próprio banco, onde toda mudança é registrada em ordem, e publicar essas mudanças no broker. É a base da técnica de Change Data Capture (CDC): um conector acompanha (tails) o log do banco e transforma cada commit em mensagem. Aplicado à outbox, captura as inserções na tabela outbox direto do log; aplicado ao banco inteiro, propaga qualquer alteração de estado.",
+    "whenToUse": [
+      "Alta vazão de eventos com exigência de baixa latência, onde o polling não escala",
+      "Quando o banco expõe um log de transações consumível (ex.: WAL do Postgres via Debezium)",
+      "Para construir pipelines de replicação/CDC que alimentam read models, data lakes ou outros domínios"
+    ],
+    "whenToAvoid": [
+      "Quando a simplicidade do polling já atende e não se quer operar um conector de CDC",
+      "Stores que não expõem o log de transações de forma acessível",
+      "Times sem maturidade operacional para lidar com a infra adicional (conector, offsets, schema evolution)"
+    ],
+    "exampleFromRepo": "O workbook trata Change Data Capture no capítulo de Replicação de Dados (CDC detecta e captura mudanças a partir do log) e o cita explicitamente como mecanismo para transportar o dado em transações Saga e Outbox. No `event-source-distributed-ledger`, o Event Store append-only em Postgres é exatamente o tipo de log de onde um conector CDC capturaria eventos para os read models.",
+    "financialExample": "Em vez de um job consultar a outbox a cada 500 ms, um conector CDC (ex.: Debezium) acompanha o WAL do Postgres do serviço de transações. Toda inserção na tabela outbox aparece no log no momento do commit e é imediatamente transformada em mensagem Kafka 'TransacaoConfirmada'. Latência cai para perto de tempo real e o banco não sofre o overhead do polling — ao custo de operar o conector e seus offsets.",
+    "tradeOffs": [
+      {
+        "dimension": "Eficiência",
+        "pro": "Sem polling: captura no momento do commit, baixa latência e sem carga extra de consulta no banco",
+        "con": "Exige acesso ao log de transações e um conector de CDC para operar e manter"
+      },
+      {
+        "dimension": "Escala",
+        "pro": "Escala para alta vazão muito melhor que o polling publisher",
+        "con": "Mais peças móveis (conector, offsets, evolução de schema) e dependência da plataforma do banco"
+      },
+      {
+        "dimension": "Acoplamento",
+        "pro": "Pode propagar mudanças sem a aplicação publicar nada explicitamente",
+        "con": "Acopla o pipeline ao formato interno do log/tabela; mudança de schema pode quebrar consumidores"
+      }
+    ],
+    "relatedPatterns": [
+      "transactional-outbox",
+      "polling-publisher",
+      "domain-event",
+      "idempotent-consumer"
+    ],
+    "interviewAngle": "É a metade 'eficiente' do par com Polling Publisher e a ponte para a conversa de CDC/Debezium. Quando alguém propõe Outbox com polling, eleve para log tailing/CDC se a escala pedir: 'em alta vazão, em vez de pollar a tabela eu faço CDC do WAL'. Saber que CDC também serve a replicação de dados (não só outbox) mostra amplitude.",
+    "diagrams": [
+      "transactional-api-flow",
+      "read-model-update",
+      "event-sourced-ledger-flow"
+    ],
+    "sourceRefs": [
+      {
+        "kind": "reference",
+        "source": "microservices.io",
+        "locator": "patterns/data/transaction-log-tailing.html"
+      },
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.411",
+        "note": "Replicação por Change Data Capture: CDC detecta e captura mudanças a partir do log de transações"
+      },
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.470",
+        "note": "Outbox Pattern e Change Data Capture em transações Saga — CDC como transporte do dado"
+      }
+    ]
+  },
+  {
+    "id": "idempotent-consumer",
+    "name": "Idempotent Consumer",
+    "category": "Messaging",
+    "problem": "Brokers e mecanismos de propagação de eventos (Kafka, SQS, outbox relay) entregam mensagens com garantia at-least-once: a mesma mensagem pode chegar duplicada por retentativas, redelivery após falha, reprocessamento ou reinício de saga. Se o consumidor aplicar o efeito mais de uma vez, o resultado fica errado — um crédito duplicado, um saldo inflado, uma cobrança em dobro.",
+    "solution": "Tornar o processamento idempotente: aplicar o mesmo evento N vezes produz o mesmo resultado de uma. Na prática, o consumidor identifica unicamente cada evento (id/chave de idempotência ou aggregate_id + version) e ignora os já processados — via PK única que rejeita duplicata, escrita condicional (INSERT IF NOT EXISTS / UPDATE ... IF version < ?) ou checagem de versão antes de aplicar. Combina com Last-Write-Wins para resolver eventos fora de ordem.",
+    "whenToUse": [
+      "Qualquer consumidor de eventos/mensagens sob entrega at-least-once (praticamente todos)",
+      "Mecanismos de reinício de saga, onde o mesmo comando pode ser reenviado",
+      "Reprocessamento histórico de eventos em Event Sourcing, para não gerar efeitos colaterais duplicados"
+    ],
+    "whenToAvoid": [
+      "Em rigor, nunca se 'evita' em fluxo event-driven — mas se a operação já é naturalmente idempotente (ex.: setar um valor absoluto), não precisa de mecanismo extra",
+      "Quando o broker realmente garante exactly-once de ponta a ponta para o seu caso (raro e geralmente com custo/limitação)"
+    ],
+    "exampleFromRepo": "O `event-source-distributed-ledger` é exemplar: `movimentacao_id` é único nos read models; o consumidor de extrato (Mongo) ignora o erro de chave duplicada 11000; o de saldo (Scylla) usa LWT `INSERT IF NOT EXISTS` e `UPDATE ... IF version < ?` para aplicar só versões maiores; o Event Store usa `UNIQUE(aggregate_id, version)`. O `msc-transactions-api` declara suporte a idempotência nas movimentações.",
+    "financialExample": "O serviço de Saldo recebe 'SaldoAtualizado(conta=42, saldo=1500, version=7)'. Antes de gravar no Scylla, faz `UPDATE saldo SET valor=1500, version=7 WHERE conta=42 IF version < 7`. Se a mesma mensagem chega de novo (version=7), a condição falha e nada acontece — sem inflar saldo. Se chega uma mensagem antiga (version=5) depois de uma nova, também é rejeitada: Last-Write-Wins por version garante o estado correto mesmo com entrega fora de ordem.",
+    "tradeOffs": [
+      {
+        "dimension": "Correção",
+        "pro": "Garante resultado correto sob at-least-once, retentativas e reprocessamento",
+        "con": "Exige uma chave de idempotência forte e armazenamento/checagem de eventos já vistos"
+      },
+      {
+        "dimension": "Custo",
+        "pro": "Geralmente barato: PK única, INSERT condicional ou comparação de version",
+        "con": "Guardar ids processados ou versões adiciona estado e uma checagem extra no caminho de escrita"
+      },
+      {
+        "dimension": "Ordem",
+        "pro": "Com version/timestamp + LWW, tolera também eventos fora de ordem",
+        "con": "Definir a chave e a regra de versão certas é sutil em domínios complexos — errar reintroduz duplicação"
+      }
+    ],
+    "relatedPatterns": [
+      "transactional-outbox",
+      "polling-publisher",
+      "transaction-log-tailing",
+      "domain-event",
+      "event-sourcing",
+      "saga"
+    ],
+    "interviewAngle": "Sempre que você desenhar consumo de eventos, o entrevistador vai perguntar 'e se a mensagem chegar duplicada ou fora de ordem?'. A resposta forte: at-least-once é o default, então o consumidor é idempotente por chave (movimentacao_id / aggregate_id+version) e usa escrita condicional + Last-Write-Wins. Citar o erro 11000 do Mongo ignorado e o `UPDATE ... IF version < ?` do Scylla mostra que você viu o padrão em produção, não só na teoria.",
+    "diagrams": [
+      "financial-movement",
+      "read-model-update",
+      "event-sourced-ledger-flow"
+    ],
+    "sourceRefs": [
+      {
+        "kind": "reference",
+        "source": "microservices.io",
+        "locator": "patterns/communication-style/idempotent-consumer.html"
+      },
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.494",
+        "note": "Idempotência em domínios complexos; id único + version incremental; checagem de versão; LWW"
+      },
+      {
+        "kind": "repo",
+        "source": "event-source-distributed-ledger",
+        "locator": "balance/ (LWT INSERT IF NOT EXISTS, UPDATE IF version<?), statement/ (Mongo dup-key 11000 ignorado)",
+        "note": "idempotência por movimentacao_id e version"
+      }
+    ]
+  },
+  {
+    "id": "api-gateway",
+    "name": "API Gateway",
+    "category": "API",
+    "problem": "Quando uma arquitetura é quebrada em dezenas ou centenas de microserviços, o cliente passa a precisar conhecer a URL, o contrato e os mecanismos de segurança de cada serviço individualmente. Isso vaza a topologia interna para fora, espalha autenticação/autorização/rate limiting por todos os serviços e torna qualquer troca de backend um trabalho que recai sobre os clientes de integração.",
+    "solution": "Colocar uma camada de borda única na frente dos serviços que recebe todas as chamadas, roteia para o microserviço correto com base em regras (basepath, método, host) e centraliza preocupações transversais — autenticação, autorização, cache, firewall, rate limiting. O cliente passa a consumir vários serviços como se fossem um só, e a topologia interna fica encapsulada atrás de um único ponto de entrada conhecido.",
+    "whenToUse": [
+      "Vários microserviços precisam ser expostos publicamente a SPAs, apps mobile ou integrações de terceiros",
+      "Há preocupações transversais (authn/authz, rate limit, cache, TLS) que você não quer reimplementar em cada serviço",
+      "Você quer poder trocar/descontinuar um backend sem impacto no cliente, respeitando o contrato exposto"
+    ],
+    "whenToAvoid": [
+      "Sistema pequeno com um único backend, onde um load balancer/reverse proxy já resolve a exposição",
+      "Necessidade de lógica de composição/agregação pesada e específica por canal (use BFF, que é uma aplicação, não infraestrutura)",
+      "Quando o gateway vira um monolito de roteamento centralizado que acopla todos os times e cresce como SPOF sem isolamento"
+    ],
+    "exampleFromRepo": "O event-source-distributed-ledger usa Kong como API Gateway na borda (e Envoy para rate limit) na frente dos serviços de comando/consulta (ledger, balance-api, statement-api), conforme docker-compose.yml e os diretórios kong/ e envoy/.",
+    "financialExample": "Num internet banking, um único gateway expõe /contas, /saldo, /extrato e /transferencias. Ele valida o JWT do cliente, aplica rate limit por CPF (proteção contra força bruta em consulta de saldo) e roteia /saldo para o balance-api e /extrato para o statement-api, sem que o app mobile saiba que são serviços e bancos distintos por trás.",
+    "tradeOffs": [
+      {
+        "dimension": "Acoplamento do cliente",
+        "pro": "Cliente conhece um único endpoint; topologia interna pode mudar sem quebrar integrações",
+        "con": "O gateway vira um contrato que precisa de governança e versionamento próprios"
+      },
+      {
+        "dimension": "Disponibilidade",
+        "pro": "Ponto central para aplicar segurança, observabilidade e throttling de forma uniforme",
+        "con": "Se mal projetado, vira ponto único de falha e gargalo de toda a entrada de tráfego"
+      },
+      {
+        "dimension": "Latência",
+        "pro": "Permite cache de borda e terminação de TLS perto do cliente",
+        "con": "Adiciona um hop de rede e processamento a cada requisição"
+      }
+    ],
+    "relatedPatterns": [
+      "backend-for-frontend",
+      "api-composition",
+      "circuit-breaker",
+      "bulkhead"
+    ],
+    "interviewAngle": "Saber separar API Gateway (componente de infraestrutura, roteamento + cross-cutting, primariamente REST) de Load Balancer (distribuição L4/L7 por host) e de BFF (aplicação especializada por canal). Em entrevista, posicione o gateway como a borda que encapsula a malha de serviços e cuide para não desenhá-lo como SPOF — mencione múltiplas instâncias e isolamento.",
+    "diagrams": [
+      "api-gateway-vs-bff",
+      "architecture-overview"
+    ],
+    "sourceRefs": [
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.185",
+        "note": "Definição de API Gateway: camada de abstração entre clientes e serviços, ponto de entrada único"
+      },
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.188",
+        "note": "API Gateways em arquiteturas de microserviços; encapsulam a complexidade e expõem endpoints simplificados"
+      },
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.190",
+        "note": "Gateway vs Load Balancer; roteamento por path-prefix e por método/path"
+      },
+      {
+        "kind": "repo",
+        "source": "event-source-distributed-ledger",
+        "locator": "kong/",
+        "note": "Kong como gateway de borda no docker-compose.yml"
+      },
+      {
+        "kind": "reference",
+        "source": "microservices.io",
+        "locator": "patterns/apigateway.html"
+      }
+    ]
+  },
+  {
+    "id": "backend-for-frontend",
+    "name": "Backend for Frontend (BFF)",
+    "category": "API",
+    "problem": "Um único backend tentando servir web, mobile e integrações de terceiros acaba cheio de condicionais por canal: o mobile precisa de payloads enxutos e sync offline, o web faz SSR e sessão centralizada, IoT usa MQTT/WebSocket. Forçar todos no mesmo contrato gera over-fetching, lógica de composição vazada para o cliente e acoplamento entre canais com requisitos de segurança e escalabilidade diferentes.",
+    "solution": "Criar um backend especializado por tipo de frontend. Cada BFF é uma aplicação completa (não um pedaço de infraestrutura) que conhece a jornada do seu canal: faz API composition (consolida várias chamadas em uma), adapta contratos (renomeia/filtra campos), aplica cache e fallbacks, e cuida de authn/authz daquele público. Cada canal evolui e escala de forma isolada.",
+    "whenToUse": [
+      "Canais com requisitos distintos de payload, segurança, cache e protocolo (web SSR vs mobile enxuto vs IoT MQTT)",
+      "Você quer mover a composição de múltiplos serviços para o servidor e simplificar/enxugar o cliente",
+      "Times end-to-end (Lei de Conway) donos de microfrontend + seu backend dedicado, com deploy/rollback acoplados"
+    ],
+    "whenToAvoid": [
+      "Apenas um canal de consumo, onde um BFF é cerimônia desnecessária",
+      "Quando a lógica é puramente de roteamento e cross-cutting genérico (isso é trabalho de API Gateway)",
+      "Proliferação de BFFs quase idênticos, criando duplicação e custo operacional sem ganho de especialização real"
+    ],
+    "exampleFromRepo": "O Lab modela um BFF de consulta da própria base de conhecimento (bff-knowledge-base): o frontend faz uma única chamada e o BFF compõe tópicos, padrões e diagramas relacionados, formatando para a tela. Nos repos do autor, o padrão de composição aparece de forma equivalente nas APIs de leitura do ledger (balance-api + statement-api), que servem read models já materializados para respostas rápidas.",
+    "financialExample": "A tela inicial do app de banco precisa de saldo, últimos 5 lançamentos e limite disponível. Sem BFF, o app faz 3 chamadas (balance-api, statement-api, limites). Com um BFF mobile, ele faz 1 chamada; o BFF agrega os três serviços, remove campos sensíveis, formata valores em centavos para a moeda local e devolve um payload pequeno — reduzindo latência e bateria do device.",
+    "tradeOffs": [
+      {
+        "dimension": "Especialização por canal",
+        "pro": "Cada canal recebe exatamente o que precisa, sem condicionais e sem over-fetching",
+        "con": "Mais artefatos para construir, versionar e operar (um por canal/microfrontend)"
+      },
+      {
+        "dimension": "Latência percebida",
+        "pro": "API composition no servidor reduz round-trips do cliente",
+        "con": "BFF mal isolado propaga falha de um serviço downstream para a tela; precisa de fallback e bulkhead"
+      },
+      {
+        "dimension": "Autonomia de time",
+        "pro": "Time end-to-end deploya UI e BFF juntos, com rollback conjunto",
+        "con": "Risco de duplicar regra de negócio entre BFFs se a fronteira não for clara"
+      }
+    ],
+    "relatedPatterns": [
+      "api-gateway",
+      "api-composition",
+      "circuit-breaker",
+      "bulkhead"
+    ],
+    "interviewAngle": "O erro clássico é tratar BFF como infraestrutura igual a um gateway. Deixe explícito: BFF é uma APLICAÇÃO, com capacidade, escalabilidade e segurança próprias, que pode inclusive ficar atrás de um API Gateway. Cite API Composition e segregação de canais como o coração do padrão, e a resiliência/blast radius por canal como o trade-off a gerenciar.",
+    "diagrams": [
+      "bff-knowledge-base",
+      "api-gateway-vs-bff"
+    ],
+    "sourceRefs": [
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.202",
+        "note": "Definição: BFFs são aplicações completas, backends especializados por tipo de frontend"
+      },
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.203",
+        "note": "API Composition no BFF; responsabilidades (authn/authz, cache, composição, adaptação de contrato, fallback)"
+      },
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.205",
+        "note": "Segregação de canais: web (SSR/JWT), mobile (payload enxuto, sync offline), IoT (MQTT/WebSocket)"
+      },
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.207",
+        "note": "Versionamento de interfaces com BFFs dedicados e feature toggles"
+      },
+      {
+        "kind": "reference",
+        "source": "microservices.io",
+        "locator": "patterns/apigateway.html"
+      }
+    ]
+  },
+  {
+    "id": "circuit-breaker",
+    "name": "Circuit Breaker",
+    "category": "Reliability",
+    "problem": "Quando uma dependência (outro serviço, banco, integração externa) começa a falhar ou ficar lenta, continuar chamando-a cega e repetidamente acumula timeouts, esgota thread/connection pools e propaga a degradação para cima, transformando uma falha localizada em colapso em cascata de todo o sistema.",
+    "solution": "Envolver a chamada à dependência num componente com estado que conta falhas. Acima de um limiar de falhas o circuito 'abre' e as chamadas falham rápido (fail-fast) ou caem em fallback, sem bater na dependência doente. Após um timeout o circuito vai para 'half-open' e deixa passar algumas chamadas de teste; se elas têm sucesso suficiente, fecha de volta; senão, reabre. Isso dá tempo para a dependência se recuperar e protege os recursos do chamador.",
+    "whenToUse": [
+      "Chamadas síncronas a serviços/integrações que podem ficar lentos ou indisponíveis",
+      "Caminhos quentes onde timeouts acumulados esgotariam thread/connection pools",
+      "Quando existe um fallback aceitável (cache stale, resposta degradada, erro tipado rápido)"
+    ],
+    "whenToAvoid": [
+      "Operações idempotentes muito baratas e locais onde fail-fast não traz ganho",
+      "Quando não há fallback nem degradação aceitável e abrir o circuito só transforma lentidão em erro imediato sem benefício",
+      "Limiar/timeout mal calibrados, que ou nunca abrem (inútil) ou ficam flapping (abre/fecha sem estabilizar)"
+    ],
+    "exampleFromRepo": "O msc-shard-router implementa circuit breaker no proxy para os shards de backend, configurável por env: CB_FAILURE_THRESHOLD=5 (falhas para abrir), CB_OPEN_TIMEOUT_SEC=30 (quanto fica aberto antes do half-open) e CB_HALF_OPEN_SUCCESS_THRESHOLD=2 (sucessos para fechar de novo). A lógica vive junto do roteamento em main.go / pkg/sharding/.",
+    "financialExample": "Uma API de transações precisa consultar um antifraude externo antes de autorizar. Se o antifraude começa a responder em 8s, sem circuit breaker cada autorização segura uma thread por 8s e a API trava. Com o breaker, após 5 falhas/timeouts o circuito abre por 30s: as autorizações ou caem em política de fallback (ex.: aprovar abaixo de um valor com revisão posterior) ou são recusadas rápido, preservando a capacidade da API para o resto do tráfego.",
+    "tradeOffs": [
+      {
+        "dimension": "Contenção de falha",
+        "pro": "Fail-fast preserva pools e evita colapso em cascata; dá tempo de recuperação ao downstream",
+        "con": "Enquanto aberto, requisições legítimas também são rejeitadas (perda de disponibilidade local controlada)"
+      },
+      {
+        "dimension": "Calibração",
+        "pro": "Limiar/timeout configuráveis adaptam o breaker ao perfil de cada dependência",
+        "con": "Parâmetros errados causam flapping ou cegueira; exige observabilidade (métricas de abertura/fechamento)"
+      },
+      {
+        "dimension": "Complexidade",
+        "pro": "Padrão bem conhecido com libs maduras",
+        "con": "Estado distribuído por instância; em frota grande, instâncias enxergam saúde diferente do mesmo downstream"
+      }
+    ],
+    "relatedPatterns": [
+      "bulkhead",
+      "health-check-api",
+      "application-metrics",
+      "api-gateway"
+    ],
+    "interviewAngle": "Saiba desenhar a máquina de estados closed → open → half-open → closed e citar os três parâmetros (failure threshold, open timeout, half-open success threshold). Conecte com bulkhead (breaker contém a falha de UMA dependência; bulkhead isola os recursos para que essa falha não derrube os outros fluxos) e mencione expor métricas de estado do circuito para observabilidade.",
+    "diagrams": [
+      "shard-router-flow",
+      "architecture-overview"
+    ],
+    "sourceRefs": [
+      {
+        "kind": "repo",
+        "source": "msc-shard-router",
+        "locator": "main.go",
+        "note": "CB_FAILURE_THRESHOLD=5, CB_OPEN_TIMEOUT_SEC=30, CB_HALF_OPEN_SUCCESS_THRESHOLD=2 no roteamento aos shards"
+      },
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.543",
+        "note": "WARN frequentemente registra 'um circuito abriu por proteção' como sinal pré-incidente"
+      },
+      {
+        "kind": "reference",
+        "source": "microservices.io",
+        "locator": "patterns/reliability/circuit-breaker.html"
+      }
+    ]
+  },
+  {
+    "id": "health-check-api",
+    "name": "Health Check API",
+    "category": "Observability",
+    "problem": "Orquestradores (Kubernetes), load balancers e gateways precisam saber se uma instância está apta a receber tráfego. Sem um sinal explícito de saúde, eles roteiam requisições para processos que subiram mas ainda não estão prontos (dependências não conectadas) ou que estão vivos no SO mas internamente travados, gerando erros e latência para o usuário.",
+    "solution": "Expor um endpoint dedicado (ex.: /healthz) que o próprio serviço responde reportando sua saúde — idealmente verificando dependências críticas (banco, cache, fila). O LB/orquestrador faz polling desse endpoint e só envia tráfego para instâncias saudáveis, retirando de rotação (ou reiniciando) as que falham. Combina-se com métricas para distinguir 'vivo' (liveness) de 'pronto para servir' (readiness).",
+    "whenToUse": [
+      "Qualquer serviço atrás de load balancer/orquestrador que decide rotação por saúde",
+      "Quando há dependências de inicialização (DB, cache, broker) que precisam estar prontas antes de receber tráfego",
+      "Para readiness em deployments (canary/rolling) — só promover a instância quando ela está apta"
+    ],
+    "whenToAvoid": [
+      "Health check que só responde 200 sem verificar nada (dá falsa sensação de saúde)",
+      "Verificações pesadas/caras no health check que sobrecarregam dependências sob alto polling",
+      "Acoplar a saúde do serviço à de uma dependência não-crítica, derrubando o serviço por algo que ele poderia degradar"
+    ],
+    "exampleFromRepo": "O msc-shard-router expõe /healthz junto de /metrics, conforme a lista de endpoints do serviço (proxy /*, /healthz, /metrics), permitindo que o orquestrador/LB faça polling de prontidão do router antes de mandar tráfego pelos shards.",
+    "financialExample": "No deploy de uma nova versão do balance-api, o readiness check valida a conexão com o ScyllaDB (read model de saldo) antes de a instância entrar em rotação. Se a conexão ao Scylla ainda não subiu, /healthz responde 503 e o orquestrador segura o tráfego — evitando que clientes recebam 'saldo indisponível' durante a janela de boot.",
+    "tradeOffs": [
+      {
+        "dimension": "Prontidão x simplicidade",
+        "pro": "Checar dependências reais evita rotear para instâncias inaptas",
+        "con": "Checagem profunda demais pode marcar como não-saudável algo recuperável e causar flapping de instâncias"
+      },
+      {
+        "dimension": "Custo de polling",
+        "pro": "Sinal barato e contínuo de saúde",
+        "con": "Polling agressivo de checks caros pressiona dependências (banco/cache)"
+      }
+    ],
+    "relatedPatterns": [
+      "application-metrics",
+      "circuit-breaker",
+      "api-gateway",
+      "cell-based-architecture"
+    ],
+    "interviewAngle": "Diferencie liveness (o processo está vivo? se não, reinicie) de readiness (está apto a receber tráfego? se não, tire de rotação mas não mate). Mostre o health check como o sinal que orquestrador e LB consomem, e conecte com deployments (readiness gating em canary/rolling) e com células (cada célula tem health própria para failover de borda).",
+    "diagrams": [
+      "architecture-overview",
+      "shard-router-flow"
+    ],
+    "sourceRefs": [
+      {
+        "kind": "repo",
+        "source": "msc-shard-router",
+        "locator": "main.go",
+        "note": "Endpoints expostos incluem /healthz além de /metrics e do proxy /*"
+      },
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.533",
+        "note": "Monitoramento e observabilidade ligados a confiabilidade; saúde do serviço sob observação"
+      },
+      {
+        "kind": "reference",
+        "source": "microservices.io",
+        "locator": "patterns/observability/health-check-api.html"
+      }
+    ]
+  },
+  {
+    "id": "application-metrics",
+    "name": "Application Metrics",
+    "category": "Observability",
+    "problem": "Logs e traces explicam casos individuais, mas não dão a visão agregada e temporal do comportamento do sistema: tendência de tráfego, taxa de erro, latência em percentis, estado de circuit breakers, métricas de negócio (transações aprovadas/recusadas). Sem métricas, o time opera no escuro sobre 'o sistema está saudável agora?'.",
+    "solution": "Instrumentar a aplicação para emitir métricas (counters, gauges, histograms) coletadas em séries temporais por uma ferramenta como Prometheus. Counters contam eventos acumulados (requests, erros, circuitos abertos); gauges medem valores pontuais que sobem e descem (conexões ativas, memória); histograms agrupam observações em buckets para calcular percentis (p95/p99 de latência). Métricas suportam tanto sinais técnicos quanto de negócio e alimentam alerting e SLOs.",
+    "whenToUse": [
+      "Sempre — é um dos três pilares da observabilidade, base para dashboards, alerting e error budget",
+      "Para responder rápido 'o sistema está saudável?' via frameworks como RED (Rate/Errors/Duration), USE e Four Golden Signals",
+      "Para expor métricas de negócio (pagamentos aceitos/recusados, recusas por falta de saldo) ao lado das técnicas"
+    ],
+    "whenToAvoid": [
+      "Indexar alta cardinalidade em labels de métrica (ex.: user_id por label) — explode séries temporais e custo",
+      "Usar só média de latência: mascara cauda longa; prefira histograms/percentis",
+      "Monitoramento por acúmulo: centenas de métricas sem modelo mental (RED/USE/Golden) viram ruído"
+    ],
+    "exampleFromRepo": "O msc-shard-router expõe Prometheus em /metrics com counters como shard_router_requests_total e shard_router_responses_total (rotulados por shard e status), permitindo ver distribuição de carga e erro por shard. Prometheus aparece também no msc-transactions-api e no event-source-distributed-ledger — instrumentação é transversal nos três repos.",
+    "financialExample": "Um histograma de duração de autorização de cartão calcula o p99: o SLA de 'responder transação de cartão em menos de 600 ms' só é verificável com histograms, não com média. Em paralelo, um counter de negócio conta 'recusas por falta de saldo' e 'transações negadas' — métricas que o time de produto usa para entender comportamento, não só saúde técnica.",
+    "tradeOffs": [
+      {
+        "dimension": "Custo x granularidade",
+        "pro": "Métricas são baratas de armazenar comparadas a logs e dão visão temporal agregada",
+        "con": "Alta cardinalidade de labels explode o número de séries e o custo de armazenamento/consulta"
+      },
+      {
+        "dimension": "Sinal x ruído",
+        "pro": "Frameworks (RED/USE/Golden Signals) dão 'estrelas-guia' que evitam afogamento em métricas",
+        "con": "Métrica agregada não diz O QUE aconteceu com a transação X — precisa correlacionar com logs/traces"
+      }
+    ],
+    "relatedPatterns": [
+      "distributed-tracing",
+      "audit-logging",
+      "health-check-api",
+      "circuit-breaker"
+    ],
+    "interviewAngle": "Saiba os três tipos (counter monotônico, gauge bidirecional, histogram para percentis) e quando usar cada um. Conecte métricas a SLI/SLO/Error Budget e cite pelo menos um framework de bússola: RED (serviços: Rate/Errors/Duration), USE (recursos: Utilization/Saturation/Errors) e Four Golden Signals (Latency/Traffic/Errors/Saturation). O ponto de maturidade é não medir latência só por média.",
+    "diagrams": [
+      "architecture-overview",
+      "shard-router-flow"
+    ],
+    "sourceRefs": [
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.538",
+        "note": "Três pilares da observabilidade: Métricas, Logs e Traces; métricas técnicas e de negócio"
+      },
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.539",
+        "note": "Counters (só aumentam), Gauges (sobem/descem) e Histogramas (buckets, percentis)"
+      },
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.553",
+        "note": "RED Method (Rate/Errors/Duration) e USE Method para recursos"
+      },
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.556",
+        "note": "Four Golden Signals: Latency, Traffic, Errors, Saturation"
+      },
+      {
+        "kind": "repo",
+        "source": "msc-shard-router",
+        "locator": "main.go",
+        "note": "Prometheus em /metrics: shard_router_requests_total, shard_router_responses_total por shard/status"
+      },
+      {
+        "kind": "reference",
+        "source": "microservices.io",
+        "locator": "patterns/observability/application-metrics.html"
+      }
+    ]
+  },
+  {
+    "id": "distributed-tracing",
+    "name": "Distributed Tracing",
+    "category": "Observability",
+    "problem": "Em microserviços, uma única transação pode atravessar dezenas de serviços. Quando ela fica lenta ou falha, métricas dizem que algo está errado e logs isolados não revelam o caminho completo: você não sabe em qual serviço, query ou chamada HTTP o tempo foi gasto nem onde quebrou ponta a ponta.",
+    "solution": "Propagar um identificador de trace (trace_id) por toda a cadeia da requisição, com spans para cada salto (serviço, função, query, cliente HTTP). Cada span carrega tempo de início/fim e relação pai-filho, montando uma narrativa coesa que mostra o caminho ponta a ponta, latência por componente e onde ocorreu o erro. Diferente de logs isolados, traces conectam os eventos numa linha do tempo única e respondem o 'porquê' de um desvio.",
+    "whenToUse": [
+      "Sistemas distribuídos onde uma transação cruza múltiplos serviços e bancos",
+      "Para localizar o gargalo de latência (qual span/serviço consumiu o tempo) e a origem de um erro de cauda",
+      "Junto com APM, para reconstruir a jornada da transação por endpoint/dependência"
+    ],
+    "whenToAvoid": [
+      "Tracing 100% das requisições em alto volume sem sampling — custo de armazenamento e overhead proibitivos",
+      "Sistema com um único serviço, onde um trace local/profiler já basta",
+      "Quando o trace_id não é propagado consistentemente entre serviços (trace quebrado é pior que nenhum)"
+    ],
+    "exampleFromRepo": "No event-source-distributed-ledger, uma movimentação atravessa Kafka (conta_movimentacao) → ledger (txn Postgres) → tópicos de confirmação → balance (ScyllaDB) e statement (MongoDB). Esse fanout assíncrono multi-store é exatamente o caso onde um trace_id propagado mostra onde a latência da consistência eventual se acumula e onde um evento foi descartado por idempotência.",
+    "financialExample": "Um cliente reclama que uma transferência levou 4s para refletir no extrato. O trace mostra: 80 ms no ledger (commit do evento no Postgres), publish no Kafka, e 3,8s de lag até o consumer do statement materializar no MongoDB. Sem trace distribuído, o time culparia o ledger; com ele, fica claro que o gargalo é o consumer do read model, não a escrita.",
+    "tradeOffs": [
+      {
+        "dimension": "Visibilidade ponta a ponta",
+        "pro": "Reconstrói a narrativa da transação e localiza o span exato do gargalo/erro",
+        "con": "Exige propagação consistente do contexto em todos os serviços e protocolos (HTTP, mensageria)"
+      },
+      {
+        "dimension": "Custo",
+        "pro": "Sampling controla volume mantendo amostras representativas",
+        "con": "Tracing completo é caro; sampling agressivo pode perder justamente a transação patológica"
+      }
+    ],
+    "relatedPatterns": [
+      "application-metrics",
+      "audit-logging",
+      "saga",
+      "event-sourcing"
+    ],
+    "interviewAngle": "Explique trace_id/span e a propagação de contexto entre serviços (inclusive cruzando mensageria assíncrona como Kafka, onde o contexto vai no header da mensagem). Posicione tracing como o pilar que responde 'ONDE e por que' demorou/quebrou, complementando métricas ('quanto') e logs ('o que aconteceu com a transação X'). Mencione sampling como decisão de custo.",
+    "diagrams": [
+      "event-sourced-ledger-flow",
+      "saga-orchestration"
+    ],
+    "sourceRefs": [
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.540",
+        "note": "Traces capturam o caminho ponta a ponta da transação por múltiplos componentes, com tempos por função/query/cliente HTTP"
+      },
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.545",
+        "note": "Correlação via trace_id/correlation_id/order_id costura logs de várias fontes numa história"
+      },
+      {
+        "kind": "repo",
+        "source": "event-source-distributed-ledger",
+        "locator": "statement/consumer.go",
+        "note": "Fanout assíncrono multi-store (Postgres→Kafka→Scylla/Mongo) é o caso clássico de trace distribuído"
+      },
+      {
+        "kind": "reference",
+        "source": "microservices.io",
+        "locator": "patterns/observability/distributed-tracing.html"
+      }
+    ]
+  },
+  {
+    "id": "audit-logging",
+    "name": "Audit Logging",
+    "category": "Observability",
+    "problem": "Em sistemas regulados (especialmente financeiros), é preciso saber com precisão o que cada usuário/serviço fez, quando, com quais parâmetros e qual foi o resultado — para investigação, compliance e disputa. Logs operacionais genéricos não bastam: precisam ser estruturados, correlacionáveis e tratar a transação como um agregado com história rastreável.",
+    "solution": "Registrar eventos de log estruturados (idealmente JSON) com níveis de severidade semânticos (TRACE/DEBUG/INFO/WARN/ERROR/FATAL) e identificadores de correlação estáveis (correlation_id, trace_id, account_id, order_id). Logs no nível INFO registram a narrativa do domínio — requisição entrou, entidade envolvida, operação aceita/recusada, evento publicado, transação concluída — permitindo costurar por um ID a história completa de uma transação. A estruturação também viabiliza indexação eficiente por campo.",
+    "whenToUse": [
+      "Domínios regulados/financeiros que exigem trilha de auditoria de quem fez o quê e quando",
+      "Para responder 'o que aconteceu com a transação X?', 'o que o usuário Y fez?', 'qual foi o erro exato?'",
+      "Quando se quer correlacionar a jornada de uma transação por múltiplos serviços via correlation_id"
+    ],
+    "whenToAvoid": [
+      "Logar PII, tokens, senhas ou dados sensíveis em claro — sempre redatar segredos na trilha",
+      "Texto puro não estruturado em escala: caro e difícil de indexar/buscar",
+      "Indexar campos de altíssima cardinalidade indiscriminadamente: custo de ingestão/armazenamento explode"
+    ],
+    "exampleFromRepo": "No event-source-distributed-ledger, o próprio Event Store (tabela events: append-only, aggregate_id, version, event_type, event_data JSONB com UNIQUE(aggregate_id, version)) é a forma mais forte de trilha de auditoria: cada mudança de estado é um evento imutável e ordenado, fonte da verdade reconstruível. O event sourcing dá auditoria nativa, e os logs estruturados por correlation_id complementam a narrativa operacional.",
+    "financialExample": "Para uma disputa de chargeback, o auditor precisa provar a sequência: 'conta criada em T0, crédito de R$500 em T1 (movimentacao_id abc), débito de R$200 em T2 com saldo resultante R$300'. Com audit logging estruturado por account_id + movimentacao_id, mais o Event Store append-only, a história é reconstruída evento a evento, com timestamps e versões — sem ambiguidade e sem perda.",
+    "tradeOffs": [
+      {
+        "dimension": "Rastreabilidade",
+        "pro": "Logs estruturados + IDs de correlação reconstroem a história completa da transação para compliance",
+        "con": "Logs têm alto custo de ingestão, armazenamento e retenção — precisam estruturação para valer o preço"
+      },
+      {
+        "dimension": "Segurança/privacidade",
+        "pro": "Trilha defensável para auditoria e disputa",
+        "con": "Risco de vazar PII/segredos na trilha se não houver redação disciplinada"
+      },
+      {
+        "dimension": "Indexação",
+        "pro": "JSON estruturado permite indexar e buscar por campo (correlation_id, account_id, severidade)",
+        "con": "Indexar tudo/alta cardinalidade degrada performance e custo"
+      }
+    ],
+    "relatedPatterns": [
+      "event-sourcing",
+      "distributed-tracing",
+      "application-metrics",
+      "idempotent-consumer"
+    ],
+    "interviewAngle": "Conecte audit logging com event sourcing: o Event Store append-only é a trilha de auditoria definitiva (imutável, ordenada, reconstruível). Saiba os níveis de severidade como intenções (não só gravidade) e o papel do correlation_id para 'contar a história' de uma transação como agregado. Levante segurança: nunca logar segredo/PII — redação obrigatória.",
+    "diagrams": [
+      "event-sourced-ledger-flow",
+      "architecture-overview"
+    ],
+    "sourceRefs": [
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.541",
+        "note": "Logs como registro imutável de evento discreto, com metadados e timestamp; níveis de severidade"
+      },
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.545",
+        "note": "Transação como agregado; correlacionar logs por trace_id/correlation_id/order_id para contar a história"
+      },
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.546",
+        "note": "Logs estruturados (JSON) para indexação eficiente por campo e controle de custo"
+      },
+      {
+        "kind": "repo",
+        "source": "event-source-distributed-ledger",
+        "locator": "database/migrations/",
+        "note": "Tabela events append-only (aggregate_id, version, event_type, event_data JSONB) como trilha de auditoria imutável"
+      },
+      {
+        "kind": "reference",
+        "source": "microservices.io",
+        "locator": "patterns/observability/audit-logging.html"
+      }
+    ]
+  },
+  {
+    "id": "consistent-hashing",
+    "name": "Consistent Hashing",
+    "category": "Scalability",
+    "problem": "No sharding/particionamento simples por 'hash(chave) % N', adicionar ou remover um shard muda N e remapeia quase todas as chaves de uma vez (rehash storm): cache invalidado em massa, dados movendo entre shards, e requisições do mesmo cliente passando a cair em shards diferentes. Em arquiteturas celulares isso quebra a garantia de 'mesmo cliente sempre na mesma célula'.",
+    "solution": "Mapear chaves e shards num mesmo anel de hash (hashring). Cada chave vai para o próximo shard no sentido horário do anel. Ao adicionar/remover um shard, só as chaves do segmento adjacente são remapeadas — o resto fica estável. Réplicas virtuais (virtual nodes) distribuem cada shard em vários pontos do anel, reduzindo hotspots e desbalanceamento. A busca do shard responsável é uma binary search O(log n) sobre os pontos ordenados do anel.",
+    "whenToUse": [
+      "Roteamento estável de requisições/chaves para shards ou células com uma chave de negócio (id_client, accountId, tenantId)",
+      "Caches distribuídos e sharding onde minimizar remapeamento ao escalar é crítico",
+      "Quando você precisa de determinismo: a mesma chave sempre na mesma partição/célula, mesmo sob picos"
+    ],
+    "whenToAvoid": [
+      "Pouquíssimos shards fixos que nunca mudam — hashing por módulo simples já basta",
+      "Chave de sharding enviesada (skew) sem réplicas virtuais suficientes — concentra carga e anula o efeito",
+      "Quando mudar o algoritmo de hashing ou o número de células sem orquestração cuidadosa pode disparar rehash storm"
+    ],
+    "exampleFromRepo": "O msc-shard-router é a implementação de referência: pkg/hashring/ constrói o anel com hash configurável (SHA-512 default, também SHA256/SHA1/MURMUR3), usa réplicas virtuais (SHUFFLE_REPLICAS) para minimizar hotspots e faz lookup por binary search O(log n). A chave de sharding vem de um header (default id_client) e o roteamento é determinístico e estável sob add/remove de shard.",
+    "financialExample": "Um sistema de ledger particiona contas por accountId. Com consistent hashing, a conta 12345 sempre cai no mesmo shard, garantindo que todos os eventos dela sejam processados em ordem na mesma partição. Ao adicionar um 11º shard para crescer capacidade, só ~1/11 das contas migra — as demais continuam no shard atual, sem invalidar caches de saldo nem reordenar eventos em massa.",
+    "tradeOffs": [
+      {
+        "dimension": "Estabilidade ao escalar",
+        "pro": "Adicionar/remover shard remapeia só uma fração das chaves, não todas",
+        "con": "Ainda há remapeamento de uma fatia; mudança de algoritmo/contagem mal orquestrada causa rehash storm"
+      },
+      {
+        "dimension": "Balanceamento",
+        "pro": "Réplicas virtuais espalham cada shard pelo anel e reduzem hotspots",
+        "con": "Chave enviesada ou poucas réplicas virtuais ainda concentram carga em poucos shards"
+      },
+      {
+        "dimension": "Custo de lookup",
+        "pro": "Busca O(log n) por binary search no anel ordenado",
+        "con": "Manter o anel ordenado e os virtual nodes adiciona complexidade e memória"
+      }
+    ],
+    "relatedPatterns": [
+      "cell-based-architecture",
+      "bulkhead",
+      "database-per-service",
+      "circuit-breaker"
+    ],
+    "interviewAngle": "Desenhe o anel e mostre por que '% N' é ruim (remapeia tudo) e o anel não (só o segmento vizinho). Cite virtual nodes para hotspots, a busca O(log n) e a função do algoritmo de hash. Conecte com cell-based: consistent hashing é um dos motores de roteamento determinístico que garante 'mesmo cliente, mesma célula' e dimensiona o blast radius por shard/célula.",
+    "diagrams": [
+      "shard-router-flow",
+      "architecture-overview"
+    ],
+    "sourceRefs": [
+      {
+        "kind": "repo",
+        "source": "msc-shard-router",
+        "locator": "pkg/hashring/",
+        "note": "Anel de hash: SHA-512 default (SHA256/SHA1/MURMUR3), réplicas virtuais, binary search O(log n), estável sob add/remove"
+      },
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.579",
+        "note": "Roteamento determinístico por chave estável; mudanças de hashing/número de células podem causar rehash storm"
+      },
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.581",
+        "note": "Segmentação celular distribuída por hashing consistente; cada célula absorve subconjunto fixo da carga"
+      },
+      {
+        "kind": "reference",
+        "source": "microservices.io",
+        "locator": "patterns/data/sharding.html"
+      }
+    ]
+  },
+  {
+    "id": "bulkhead",
+    "name": "Bulkhead",
+    "category": "Reliability",
+    "problem": "Quando todos os fluxos de um sistema compartilham os mesmos recursos finitos (thread pool, connection pool, fila, banco, nós), a saturação ou falha de um fluxo consome a capacidade global e se propaga para todos os outros. Uma integração externa lenta pode esgotar as threads e derrubar operações internas que nada têm a ver com ela.",
+    "solution": "Particionar explicitamente os recursos por domínio operacional, como os anteparos (bulkheads) que dividem o casco de um navio em compartimentos estanques: se um é perfurado, só aquele alaga e o navio flutua. Em software, isso é segregar pools de threads/conexões, filas e tópicos por fluxo, e — no nível físico — separar workloads críticos em nós/zonas/regiões distintos. O sistema deixa de ser um bloco homogêneo e vira compartimentos independentes, cada um com capacidade, limites e degradação próprios. O objetivo não é evitar a falha, é conter o blast radius.",
+    "whenToUse": [
+      "Fluxos com criticidades diferentes compartilhando recursos (leitura vs escrita, crítico vs não-crítico)",
+      "Serviço que consome múltiplas integrações externas instáveis — cada uma merece seu compartimento",
+      "Quando você quer transformar 'o sistema caiu' em 'X% do sistema foi impactado' (degradação localizada)"
+    ],
+    "whenToAvoid": [
+      "Sistema pequeno e homogêneo onde a partição só adiciona complexidade sem ganho de isolamento",
+      "Quando se confunde bulkhead com rate limiting global — limite global protege o todo mas não isola os fluxos entre si",
+      "Bulkhead físico (nós/regiões dedicados) quando o custo extra não se justifica para a criticidade do workload"
+    ],
+    "exampleFromRepo": "O msc-shard-router materializa bulkheads por sharding: cada shard é um compartimento com capacidade e curva de degradação próprias; a falha de um shard fica contida e não cascateia para os demais (pkg/sharding/). O circuit breaker por shard (CB_*) reforça a contenção. O workbook formaliza a relação shard ↔ bulkhead ↔ blast radius.",
+    "financialExample": "Uma API de transações tem um pool de conexões ao Postgres. Operações de débito/crédito (críticas) e geração de relatórios pesados (não-crítica) compartilham o mesmo pool: um pico de relatórios esgota as conexões e as autorizações de cartão começam a falhar. Com bulkhead lógico — pools separados para 'transacional' e 'relatórios' — o pico de relatórios degrada só os relatórios; as autorizações seguem dentro do seu pool reservado.",
+    "tradeOffs": [
+      {
+        "dimension": "Contenção de blast radius",
+        "pro": "Falha/saturação fica confinada ao compartimento; mais bulkheads = menor blast radius (1 shard=100%, 10 shards=10%)",
+        "con": "Mais bulkheads = maior complexidade operacional; particionar capacidade pode subutilizar recursos em cada pool"
+      },
+      {
+        "dimension": "Custo (bulkhead físico)",
+        "pro": "Isolar workloads em nós/zonas/regiões dá garantias fortes contra shared fate",
+        "con": "Infraestrutura dedicada é mais cara que compartilhar; precisa justificar pela criticidade"
+      },
+      {
+        "dimension": "Distribuição de carga",
+        "pro": "Compartimentos previsíveis tornam a degradação estatística e gerenciável",
+        "con": "Distribuição enviesada entre bulkheads concentra carga e anula o isolamento"
+      }
+    ],
+    "relatedPatterns": [
+      "cell-based-architecture",
+      "circuit-breaker",
+      "consistent-hashing",
+      "database-per-service"
+    ],
+    "interviewAngle": "Use a analogia naval (compartimentos estanques) e deixe claro que bulkhead NÃO é retry/timeout/fallback — é separação de recursos. Distinga bulkhead lógico (thread/connection pools, filas por domínio) de físico (nós/zonas/regiões) e de rate limiting global (que protege o todo mas não isola fluxos entre si). Conecte com a tabela bulkheads × blast radius e posicione cell-based como a evolução do bulkhead.",
+    "diagrams": [
+      "shard-router-flow",
+      "architecture-overview"
+    ],
+    "sourceRefs": [
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.558",
+        "note": "Definição: padrão de contenção de falhas; separação explícita de domínios operacionais; origem na engenharia naval"
+      },
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.562",
+        "note": "Bulkhead lógico (thread/connection pools, filas/tópicos por domínio) vs rate limiting global"
+      },
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.563",
+        "note": "Bulkhead físico: separar workloads críticos em nós/zonas/regiões (shared fate)"
+      },
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.565",
+        "note": "Tabela bulkheads × blast radius: mais shards = menor blast radius, maior complexidade"
+      },
+      {
+        "kind": "repo",
+        "source": "msc-shard-router",
+        "locator": "pkg/sharding/",
+        "note": "Cada shard isolado como bulkhead; falha contida, sem cascata"
+      },
+      {
+        "kind": "reference",
+        "source": "microservices.io",
+        "locator": "patterns/reliability/bulkhead.html"
+      }
+    ]
+  },
+  {
+    "id": "cell-based-architecture",
+    "name": "Cell-Based Architecture",
+    "category": "Scalability",
+    "problem": "Mesmo com bulkheads, sistemas críticos de larguíssima escala ainda têm domínios de falha grandes demais: estado logicamente compartilhado, componentes globais (filas, caches, gateways) e blast radius difícil de medir. Uma falha 'isolada' ainda pode atingir uma fatia grande do público porque o isolamento não vai até o estado e a infraestrutura.",
+    "solution": "Estruturar as capacidades em uma rede de células independentes e autocontidas — uma evolução do Bulkhead Pattern. Cada célula tem seus próprios microserviços, bancos, caches, consumidores e observabilidade, atende um subconjunto determinístico do público e só se comunica para fora por um gateway de borda. Componentes internos só conhecem a própria célula; não há estado compartilhado entre células, apenas replicação passiva para failover. Uma camada de roteamento inteligente (Edge Cells) direciona cada requisição para sua célula por uma chave estável (customerId/accountId/tenantId), de forma determinística.",
+    "whenToUse": [
+      "Sistemas de altíssima criticidade e disponibilidade onde blast radius mensurável e contido é requisito",
+      "Quando você quer 'mesmo cliente sempre na mesma célula', com failover para célula passiva transparente",
+      "Para isolar experimentos/canary por célula (runtime/tuning/feature rollout) sem afetar o resto do ecossistema"
+    ],
+    "whenToAvoid": [
+      "Sistemas simples/médios onde a complexidade de operar N células (deploy, dados, roteamento) não se paga",
+      "Quando há forte dependência de estado realmente compartilhado entre todos os clientes (quebra o isolamento celular)",
+      "Sem capacidade de orquestrar mudanças de roteamento/contagem de células — risco de rehash storm massivo"
+    ],
+    "exampleFromRepo": "O msc-shard-router foi construído como parte de uma pesquisa de mestrado sobre arquitetura celular: é a 'Edge Cell' de referência — roteador determinístico por chave estável (id_client via consistent hashing em pkg/hashring/) que direciona cada cliente para sua célula/shard. O workbook situa a arquitetura celular como evolução dos bulkheads com replicação passiva entre células.",
+    "financialExample": "Um banco digital divide a base de clientes em 20 células por accountId. Cada célula tem seu próprio cluster de ledger, ScyllaDB de saldo e MongoDB de extrato. Se a célula 7 sofre um incidente, apenas 5% dos clientes são afetados; o Edge Cell pode redirecionar esses clientes para a célula passiva replicada, restaurando o serviço sem o resto da base perceber. Experimentos de novo motor de antifraude rodam só na célula 1 antes de propagar.",
+    "tradeOffs": [
+      {
+        "dimension": "Disponibilidade / blast radius",
+        "pro": "Falha fica contida a uma célula (ex.: 1/20 = 5% do público); failover para célula passiva replicada",
+        "con": "Complexidade operacional alta: N células para deployar, observar e rotear; replicação entre células"
+      },
+      {
+        "dimension": "Roteamento",
+        "pro": "Determinístico por chave estável garante 'mesmo cliente, mesma célula' e afinidade de estado",
+        "con": "Edge Cell precisa ser altamente distribuída para não virar o novo SPOF; mudar hashing/contagem causa rehash storm"
+      },
+      {
+        "dimension": "Isolamento de estado",
+        "pro": "Sem estado compartilhado (só replicação passiva) maximiza independência das células",
+        "con": "Qualquer componente global compartilhado (fila/cache/DB) invalida o isolamento e precisa ser mediado por borda"
+      }
+    ],
+    "relatedPatterns": [
+      "bulkhead",
+      "consistent-hashing",
+      "circuit-breaker",
+      "api-gateway"
+    ],
+    "interviewAngle": "Posicione cell-based como a EVOLUÇÃO do bulkhead: não é só sharding sofisticado, é modelar domínios de falha em múltiplas dimensões (execução, persistência, observabilidade, deploy, falha). Destaque os pilares: célula autocontida sem estado compartilhado, comunicação externa só por gateway de borda, roteamento determinístico por chave estável (Edge Cells) e replicação passiva para failover. Levante o risco do Edge Cell virar SPOF e do rehash storm.",
+    "diagrams": [
+      "architecture-overview",
+      "shard-router-flow"
+    ],
+    "sourceRefs": [
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.576",
+        "note": "Arquitetura celular como evolução do Bulkhead Pattern; modela domínios de falha, não é só particionamento horizontal"
+      },
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.577",
+        "note": "Unidade celular: segmentação de execução, persistência, observabilidade, deploy e falha; sem componentes globais compartilhados"
+      },
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.578",
+        "note": "Isolamento de estado: comunicação externa só por gateway de borda; componentes internos só conhecem a própria célula"
+      },
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.579",
+        "note": "Roteamento determinístico por chave estável (customerId/accountId/tenantId); Edge Cells; risco de rehash storm"
+      },
+      {
+        "kind": "repo",
+        "source": "msc-shard-router",
+        "locator": "pkg/hashring/",
+        "note": "Edge Cell de referência da pesquisa de mestrado em arquitetura celular; roteamento determinístico por id_client"
+      },
+      {
+        "kind": "reference",
+        "source": "microservices.io",
+        "locator": "patterns/data/sharding.html"
+      }
+    ]
+  }
+]

@@ -1,0 +1,594 @@
+[
+  {
+    "id": "shard-router-request",
+    "title": "Roteamento de requisição por hashing consistente (Shard Router)",
+    "summary": "Como o msc-shard-router recebe uma requisição HTTP, extrai a chave de sharding, calcula o hash consistente e encaminha para o shard determinístico responsável, com circuit breaker protegendo cada backend.",
+    "components": [
+      "Cliente HTTP",
+      "Shard Router (proxy Go/Gorilla Mux)",
+      "Hash Ring (consistent hashing, réplicas virtuais)",
+      "Circuit Breaker por shard",
+      "Shard N (backend particionado)",
+      "Prometheus (métricas)"
+    ],
+    "steps": [
+      {
+        "order": 1,
+        "actor": "Cliente",
+        "action": "Envia requisição HTTP para o roteador incluindo o header da chave de sharding (por padrão `id_client`).",
+        "note": "A chave identifica deterministicamente a qual partição o dado/cliente pertence."
+      },
+      {
+        "order": 2,
+        "actor": "Shard Router",
+        "action": "Extrai o valor da SHARDING_KEY do header da requisição. Se ausente, aplica o comportamento de fallback configurado."
+      },
+      {
+        "order": 3,
+        "actor": "Hash Ring",
+        "action": "Calcula o hash da chave (SHA-512 por padrão, configurável para SHA256/SHA1/MURMUR3) e mapeia o resultado em um ponto do anel.",
+        "note": "Réplicas virtuais (vnodes) distribuem a chave de forma uniforme e evitam hot partitions."
+      },
+      {
+        "order": 4,
+        "actor": "Hash Ring",
+        "action": "Faz busca binária O(log n) no anel ordenado para encontrar o primeiro shard no sentido horário, resolvendo o shard de destino de forma determinística."
+      },
+      {
+        "order": 5,
+        "actor": "Circuit Breaker",
+        "action": "Verifica o estado do breaker do shard alvo. Se OPEN (>= CB_FAILURE_THRESHOLD=5 falhas), curto-circuita imediatamente; se HALF_OPEN, libera tráfego de teste.",
+        "note": "Isola a falha de um shard (bulkhead) e evita propagação em cascata."
+      },
+      {
+        "order": 6,
+        "actor": "Shard Router",
+        "action": "Encaminha (proxy) a requisição para a URL do Shard N descoberta dinamicamente via variável `SHARD_<n>_URL`."
+      },
+      {
+        "order": 7,
+        "actor": "Shard N",
+        "action": "Processa a requisição sobre sua partição isolada de dados e devolve a resposta."
+      },
+      {
+        "order": 8,
+        "actor": "Shard Router",
+        "action": "Incrementa métricas Prometheus (`shard_router_requests_total`, `shard_router_responses_total` rotuladas por shard/status) e devolve a resposta ao cliente.",
+        "note": "Em sucesso/falha o circuit breaker atualiza seus contadores para o shard."
+      }
+    ],
+    "relatedPatterns": [
+      "consistent-hashing",
+      "bulkhead",
+      "circuit-breaker",
+      "cell-based-architecture",
+      "application-metrics",
+      "health-check-api"
+    ],
+    "diagram": "shard-router-flow",
+    "sourceRefs": [
+      {
+        "kind": "repo",
+        "source": "msc-shard-router",
+        "locator": "pkg/hashring/",
+        "note": "anel de hashing consistente com réplicas virtuais e busca binária"
+      },
+      {
+        "kind": "repo",
+        "source": "msc-shard-router",
+        "locator": "pkg/sharding/",
+        "note": "extração da SHARDING_KEY e resolução do shard de destino"
+      },
+      {
+        "kind": "repo",
+        "source": "msc-shard-router",
+        "locator": "main.go",
+        "note": "proxy HTTP, circuit breaker e métricas Prometheus"
+      },
+      {
+        "kind": "reference",
+        "source": "microservices.io",
+        "locator": "patterns/cell-based-architecture.html"
+      }
+    ]
+  },
+  {
+    "id": "transactional-debit-credit",
+    "title": "Débito/crédito com controle transacional de saldo e limite (Transactions API)",
+    "summary": "Como a msc-transactions-api processa uma movimentação financeira garantindo consistência forte de saldo e limite dentro de uma transação ACID no PostgreSQL, com idempotência e cache em Redis.",
+    "components": [
+      "Cliente",
+      "Transactions API (Go/Fiber)",
+      "Camada de idempotência",
+      "PostgreSQL 16 (Bun ORM)",
+      "Redis 7 (cache de saldo)",
+      "Prometheus"
+    ],
+    "steps": [
+      {
+        "order": 1,
+        "actor": "Cliente",
+        "action": "Envia requisição de débito ou crédito para a API com a chave de idempotência da operação."
+      },
+      {
+        "order": 2,
+        "actor": "Transactions API",
+        "action": "Valida o DTO da requisição e verifica a chave de idempotência: se a operação já foi processada, retorna o resultado anterior sem reaplicar o efeito.",
+        "note": "Idempotência evita débito/crédito duplicado em retries do cliente."
+      },
+      {
+        "order": 3,
+        "actor": "Transactions API",
+        "action": "Abre uma transação SQL no PostgreSQL e bloqueia/recarrega o registro de saldo do cliente para leitura consistente.",
+        "note": "A transação é a fronteira de consistência forte (ACID)."
+      },
+      {
+        "order": 4,
+        "actor": "Transactions API",
+        "action": "Aplica as regras de negócio: em débito, valida se saldo + limite cobrem o valor; em crédito, soma ao saldo. Rejeita a operação se violar saldo/limite."
+      },
+      {
+        "order": 5,
+        "actor": "PostgreSQL",
+        "action": "Persiste o novo saldo e o registro da transação. Em `ENV=shadow`, executa em modo de simulação/rollback sem efeito definitivo.",
+        "note": "Modo shadow permite validar o caminho sem mutar o estado real."
+      },
+      {
+        "order": 6,
+        "actor": "Transactions API",
+        "action": "Faz commit da transação. Em qualquer falha de regra ou I/O, faz rollback deixando o saldo intacto."
+      },
+      {
+        "order": 7,
+        "actor": "Redis",
+        "action": "Atualiza/invalida o cache de saldo do cliente para acelerar leituras subsequentes.",
+        "note": "Cache é projeção; o PostgreSQL permanece a fonte de verdade do saldo."
+      },
+      {
+        "order": 8,
+        "actor": "Transactions API",
+        "action": "Registra métricas Prometheus da movimentação e devolve a confirmação ao cliente."
+      }
+    ],
+    "relatedPatterns": [
+      "idempotent-consumer",
+      "circuit-breaker",
+      "application-metrics",
+      "database-per-service"
+    ],
+    "diagram": "transactional-api-flow",
+    "sourceRefs": [
+      {
+        "kind": "repo",
+        "source": "msc-transactions-api",
+        "locator": "services/",
+        "note": "regras de negócio de saldo/limite e fronteira transacional"
+      },
+      {
+        "kind": "repo",
+        "source": "msc-transactions-api",
+        "locator": "entities/",
+        "note": "modelos de domínio de cliente, saldo e transação"
+      },
+      {
+        "kind": "repo",
+        "source": "msc-transactions-api",
+        "locator": "routes/",
+        "note": "endpoints de débito/crédito e validação de DTO"
+      },
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.74",
+        "note": "modelo ACID (atomicidade, consistência, isolamento, durabilidade)"
+      }
+    ]
+  },
+  {
+    "id": "event-sourced-write",
+    "title": "Escrita event-sourced: comando, evento atômico e confirmação pós-commit (Ledger)",
+    "summary": "Como o ledger do event-source-distributed-ledger consome um comando do Kafka, persiste o evento de forma atômica no Event Store (PostgreSQL) com controle de versão e só então publica as confirmações downstream, evitando dual write.",
+    "components": [
+      "Simulador/Cliente",
+      "Kafka (tópicos de comando)",
+      "Ledger (consumidor Go)",
+      "Event Store — PostgreSQL (tabela `events`, append-only)",
+      "Read models transacionais (`accounts`, `transactions`)",
+      "Kafka (tópicos de confirmação)"
+    ],
+    "steps": [
+      {
+        "order": 1,
+        "actor": "Cliente",
+        "action": "Publica um comando no Kafka (`conta_criada` ou `conta_movimentacao`) descrevendo a intenção de mudança de estado.",
+        "note": "O comando é a intenção; o evento confirmado é o fato."
+      },
+      {
+        "order": 2,
+        "actor": "Ledger",
+        "action": "Consome o comando do tópico de entrada e valida as regras do agregado correspondente."
+      },
+      {
+        "order": 3,
+        "actor": "Ledger",
+        "action": "Abre uma transação no PostgreSQL e calcula a próxima `version` do agregado (locking otimista)."
+      },
+      {
+        "order": 4,
+        "actor": "Event Store",
+        "action": "Anexa o evento imutável na tabela `events` (`aggregate_id`, `version`, `event_type`, `event_data` JSONB) respeitando `UNIQUE(aggregate_id, version)`.",
+        "note": "A unicidade (aggregate_id, version) garante ordenação e é a fonte de verdade."
+      },
+      {
+        "order": 5,
+        "actor": "Ledger",
+        "action": "Na mesma transação, atualiza os read models transacionais locais (`accounts` materializado, `transactions` cronológico)."
+      },
+      {
+        "order": 6,
+        "actor": "PostgreSQL",
+        "action": "Faz commit atômico de evento + read models transacionais juntos. Em conflito de versão ou violação de regra, faz rollback de tudo.",
+        "note": "Atomicidade do evento com as projeções locais evita estados parciais."
+      },
+      {
+        "order": 7,
+        "actor": "Ledger",
+        "action": "Somente APÓS o commit, publica as confirmações nos tópicos de saída (`ledger_nova_conta_registrada`, `ledger_nova_transacao_confirmada`, `ledger_saldo_atualizado`).",
+        "note": "Publicação pós-commit evita o problema de dual write (evento gravado e mensagem perdida, ou vice-versa)."
+      }
+    ],
+    "relatedPatterns": [
+      "event-sourcing",
+      "domain-event",
+      "transactional-outbox",
+      "idempotent-consumer",
+      "database-per-service"
+    ],
+    "diagram": "event-sourced-ledger-flow",
+    "sourceRefs": [
+      {
+        "kind": "repo",
+        "source": "event-source-distributed-ledger",
+        "locator": "ledger/main.go",
+        "note": "consumo de comando, transação SQL, versão e publicação pós-commit"
+      },
+      {
+        "kind": "repo",
+        "source": "event-source-distributed-ledger",
+        "locator": "database/migrations/",
+        "note": "tabela events append-only com UNIQUE(aggregate_id, version)"
+      },
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.478",
+        "note": "Event Store como ledger imutável append-only e papel do agregado"
+      },
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.480",
+        "note": "publicação atômica de eventos no Event Bus somente após gravação bem-sucedida"
+      }
+    ]
+  },
+  {
+    "id": "cqrs-read-model-update",
+    "title": "Atualização do read model via CQRS com consistência eventual (Balance/Statement)",
+    "summary": "Como os serviços de ingestão do ledger consomem as confirmações publicadas pelo Event Store e atualizam read models otimizados para leitura (saldo em ScyllaDB, extrato em MongoDB), garantindo idempotência e ordenação por versão.",
+    "components": [
+      "Kafka (tópicos de confirmação)",
+      "Balance consumer (Go)",
+      "ScyllaDB (read model de saldo)",
+      "Statement consumer (Go)",
+      "MongoDB (read model de extrato)",
+      "Balance API / Statement API"
+    ],
+    "steps": [
+      {
+        "order": 1,
+        "actor": "Ledger",
+        "action": "Publica `ledger_saldo_atualizado` e `ledger_nova_transacao_confirmada` após o commit do evento.",
+        "note": "Os comandos escrevem no Event Store; os read models leem dessas confirmações (segregação command/query)."
+      },
+      {
+        "order": 2,
+        "actor": "Balance consumer",
+        "action": "Consome `ledger_saldo_atualizado` e aplica o saldo no ScyllaDB usando LWT (`UPDATE ... IF version < ?` / `INSERT IF NOT EXISTS`).",
+        "note": "O Lightweight Transaction só aplica versões maiores, garantindo Last-Write-Wins por ordenação."
+      },
+      {
+        "order": 3,
+        "actor": "Statement consumer",
+        "action": "Consome `ledger_nova_transacao_confirmada` e insere a linha de extrato no MongoDB usando `movimentacao_id` como chave única.",
+        "note": "Erro de chave duplicada (Mongo 11000) é ignorado — torna o consumo idempotente."
+      },
+      {
+        "order": 4,
+        "actor": "ScyllaDB / MongoDB",
+        "action": "Persistem as projeções otimizadas para leitura, materializadas e desnormalizadas para responder consultas rapidamente."
+      },
+      {
+        "order": 5,
+        "actor": "Cliente",
+        "action": "Consulta saldo na Balance API (ScyllaDB) ou histórico na Statement API (MongoDB) e recebe resposta de baixa latência.",
+        "note": "Leitura serve o read model; pode estar momentaneamente atrás da escrita (consistência eventual)."
+      }
+    ],
+    "relatedPatterns": [
+      "cqrs",
+      "event-sourcing",
+      "domain-event",
+      "idempotent-consumer",
+      "database-per-service",
+      "api-composition"
+    ],
+    "diagram": "read-model-update",
+    "sourceRefs": [
+      {
+        "kind": "repo",
+        "source": "event-source-distributed-ledger",
+        "locator": "balance/consumer.go",
+        "note": "atualização de saldo no ScyllaDB com LWT por versão"
+      },
+      {
+        "kind": "repo",
+        "source": "event-source-distributed-ledger",
+        "locator": "statement/consumer.go",
+        "note": "inserção idempotente de extrato no MongoDB (ignora erro 11000)"
+      },
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.420",
+        "note": "definição de CQRS e separação de responsabilidades de comando/consulta"
+      },
+      {
+        "kind": "reference",
+        "source": "microservices.io",
+        "locator": "patterns/data/cqrs.html"
+      }
+    ]
+  },
+  {
+    "id": "account-creation",
+    "title": "Criação de conta event-sourced (conta_criada)",
+    "summary": "Fluxo ponta a ponta de criação de conta no ledger distribuído: comando no Kafka, primeiro evento do agregado no Event Store e propagação para os read models de saldo e extrato.",
+    "components": [
+      "Cliente/Simulador",
+      "Kafka (`conta_criada`)",
+      "Ledger",
+      "Event Store (PostgreSQL)",
+      "Balance consumer → ScyllaDB",
+      "Statement consumer → MongoDB"
+    ],
+    "steps": [
+      {
+        "order": 1,
+        "actor": "Cliente",
+        "action": "Publica o comando `conta_criada` no Kafka com os dados iniciais da conta."
+      },
+      {
+        "order": 2,
+        "actor": "Ledger",
+        "action": "Consome o comando, valida e cria o agregado de conta com `version = 1`."
+      },
+      {
+        "order": 3,
+        "actor": "Event Store",
+        "action": "Anexa o evento de criação na tabela `events` (`aggregate_id`, `version=1`) dentro de uma transação PostgreSQL.",
+        "note": "Esse é o primeiro fato da linha do tempo do agregado."
+      },
+      {
+        "order": 4,
+        "actor": "Ledger",
+        "action": "Na mesma transação, materializa a conta no read model transacional `accounts` com saldo inicial e dá commit."
+      },
+      {
+        "order": 5,
+        "actor": "Ledger",
+        "action": "Após o commit, publica `ledger_nova_conta_registrada` (e o estado de saldo inicial) nos tópicos de confirmação."
+      },
+      {
+        "order": 6,
+        "actor": "Balance consumer",
+        "action": "Consome a confirmação e cria o registro de saldo da conta no ScyllaDB (`INSERT IF NOT EXISTS`).",
+        "note": "Idempotente: reprocessar o evento não duplica a conta."
+      },
+      {
+        "order": 7,
+        "actor": "Statement consumer",
+        "action": "Inicializa o read model de extrato da conta no MongoDB para receber futuras movimentações."
+      }
+    ],
+    "relatedPatterns": [
+      "event-sourcing",
+      "domain-event",
+      "cqrs",
+      "idempotent-consumer",
+      "database-per-service"
+    ],
+    "diagram": "account-creation",
+    "sourceRefs": [
+      {
+        "kind": "repo",
+        "source": "event-source-distributed-ledger",
+        "locator": "ledger/main.go",
+        "note": "consumo de conta_criada e gravação do primeiro evento do agregado"
+      },
+      {
+        "kind": "repo",
+        "source": "event-source-distributed-ledger",
+        "locator": "balance/consumer.go",
+        "note": "criação idempotente do saldo no ScyllaDB"
+      },
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.478",
+        "note": "agregado como unidade lógica/transacional e versionamento de eventos"
+      }
+    ]
+  },
+  {
+    "id": "financial-movement",
+    "title": "Movimentação financeira event-sourced (conta_movimentacao)",
+    "summary": "Fluxo de débito/crédito no ledger distribuído: o comando vira um evento versionado no Event Store após validar saldo, e o novo saldo e a transação são projetados nos read models com ordenação e idempotência.",
+    "components": [
+      "Cliente/Simulador",
+      "Kafka (`conta_movimentacao`)",
+      "Ledger",
+      "Event Store (PostgreSQL)",
+      "ScyllaDB (saldo)",
+      "MongoDB (extrato)"
+    ],
+    "steps": [
+      {
+        "order": 1,
+        "actor": "Cliente",
+        "action": "Publica `conta_movimentacao` no Kafka com `movimentacao_id`, conta, tipo (débito/crédito) e valor."
+      },
+      {
+        "order": 2,
+        "actor": "Ledger",
+        "action": "Consome a mensagem e abre a transação SQL; calcula a próxima `version` do agregado (locking otimista)."
+      },
+      {
+        "order": 3,
+        "actor": "Ledger",
+        "action": "Lê o saldo atual no read model transacional, computa o novo saldo e valida as regras de negócio da movimentação.",
+        "note": "Rejeita (e dá rollback) se a movimentação violar as regras de saldo."
+      },
+      {
+        "order": 4,
+        "actor": "Event Store",
+        "action": "Anexa o evento de movimentação em `events` com a nova versão e atualiza `accounts`/`transactions` na mesma transação; faz commit."
+      },
+      {
+        "order": 5,
+        "actor": "Ledger",
+        "action": "Após o commit, publica `ledger_saldo_atualizado` (→ Scylla) e `ledger_nova_transacao_confirmada` (→ Mongo)."
+      },
+      {
+        "order": 6,
+        "actor": "Balance consumer",
+        "action": "Aplica o novo saldo no ScyllaDB via LWT `UPDATE ... IF version < ?`, descartando eventos fora de ordem.",
+        "note": "Garante Last-Write-Wins: só versões maiores avançam o saldo."
+      },
+      {
+        "order": 7,
+        "actor": "Statement consumer",
+        "action": "Insere a linha da movimentação no MongoDB usando `movimentacao_id` único; ignora duplicata (erro 11000) por idempotência."
+      }
+    ],
+    "relatedPatterns": [
+      "event-sourcing",
+      "domain-event",
+      "cqrs",
+      "idempotent-consumer",
+      "transactional-outbox",
+      "database-per-service"
+    ],
+    "diagram": "financial-movement",
+    "sourceRefs": [
+      {
+        "kind": "repo",
+        "source": "event-source-distributed-ledger",
+        "locator": "ledger/main.go",
+        "note": "validação de saldo, evento versionado e publicação pós-commit"
+      },
+      {
+        "kind": "repo",
+        "source": "event-source-distributed-ledger",
+        "locator": "balance/consumer.go",
+        "note": "LWT por versão no ScyllaDB (UPDATE ... IF version < ?)"
+      },
+      {
+        "kind": "repo",
+        "source": "event-source-distributed-ledger",
+        "locator": "statement/consumer.go",
+        "note": "idempotência por movimentacao_id no MongoDB"
+      },
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.492",
+        "note": "versionamento e garantias de ordem em consistência eventual (Last-Write-Wins)"
+      }
+    ]
+  },
+  {
+    "id": "bff-knowledge-query",
+    "title": "Consulta à base de conhecimento via BFF (frontend → BFF Java → knowledge-base local)",
+    "summary": "Como o frontend do próprio System Design Specialist Lab consulta um tópico/padrão: o BFF em Java desserializa os arquivos JSON locais da knowledge-base em records, compõe a resposta agregando itens relacionados e devolve um payload pronto para a UI.",
+    "components": [
+      "Frontend (UI do Lab)",
+      "BFF Java",
+      "Knowledge-base local (arquivos JSON validados pelo schema)",
+      "Camada de composição/agregação"
+    ],
+    "steps": [
+      {
+        "order": 1,
+        "actor": "Frontend",
+        "action": "Usuário abre um tópico/padrão; a UI faz uma chamada HTTP ao BFF pedindo o item e o que se relaciona a ele."
+      },
+      {
+        "order": 2,
+        "actor": "BFF Java",
+        "action": "Recebe a requisição e localiza o item pedido na knowledge-base local (ex.: tópico, padrão, fluxo ou diagrama).",
+        "note": "O BFF é específico do canal: entrega exatamente o shape que essa UI precisa."
+      },
+      {
+        "order": 3,
+        "actor": "BFF Java",
+        "action": "Desserializa os arquivos JSON da knowledge-base em records Java tipados, conforme o contrato do schema.",
+        "note": "Cada item já carrega seus sourceRefs (sem claim sem evidência)."
+      },
+      {
+        "order": 4,
+        "actor": "Camada de composição",
+        "action": "Resolve as referências cruzadas (relatedTopics, relatedPatterns, diagrams) e agrega os itens vinculados em uma única resposta.",
+        "note": "Aplica o API Composition Pattern dentro do BFF para evitar várias idas e voltas do frontend."
+      },
+      {
+        "order": 5,
+        "actor": "BFF Java",
+        "action": "Monta o payload de resposta enxuto e orientado à tela e o devolve ao frontend.",
+        "note": "Degradação graciosa: se um item relacionado faltar, retorna o principal sem quebrar a página."
+      },
+      {
+        "order": 6,
+        "actor": "Frontend",
+        "action": "Renderiza o conteúdo (explicação, trade-offs, diagramas Mermaid e fontes) para estudo/entrevista."
+      }
+    ],
+    "relatedPatterns": [
+      "backend-for-frontend",
+      "api-composition",
+      "api-gateway",
+      "health-check-api"
+    ],
+    "diagram": "bff-knowledge-base",
+    "sourceRefs": [
+      {
+        "kind": "reference",
+        "source": "knowledge-base.schema.json",
+        "locator": "knowledge-base/schema/knowledge-base.schema.json",
+        "note": "o BFF Java desserializa estes arquivos em records; o frontend os renderiza"
+      },
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.202",
+        "note": "definição de Backend for Frontend (BFF)"
+      },
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.203",
+        "note": "API Composition Pattern e responsabilidades arquiteturais nos BFFs"
+      }
+    ]
+  }
+]

@@ -1,0 +1,720 @@
+[
+  {
+    "id": "e01",
+    "claim": "Hash consistente reduz o remapeamento de chaves quando se adiciona ou remove um shard, mantendo o roteamento estável.",
+    "evidence": "O shard-router implementa um anel de hash consistente (SHA-512 default, configurável para SHA256/SHA1/MURMUR3) com réplicas virtuais para diluir hotspots e busca binária O(log n) na lookup. O README descreve o anel como estável sob adição/remoção de shard — só uma fração das chaves é remapeada, não todas.",
+    "relatedTopics": [
+      "sharding-partitioning",
+      "cell-based",
+      "load-balancing"
+    ],
+    "relatedPatterns": [
+      "consistent-hashing",
+      "cell-based-architecture"
+    ],
+    "sourceRefs": [
+      {
+        "kind": "repo",
+        "source": "msc-shard-router",
+        "locator": "pkg/hashring/",
+        "note": "anel SHA-512 + réplicas virtuais + busca binária O(log n)"
+      },
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.377",
+        "note": "Sharding Keys e Hot Partitions"
+      }
+    ]
+  },
+  {
+    "id": "e02",
+    "claim": "O ledger publica os eventos no Kafka somente DEPOIS de o commit da transação no Postgres ter sucesso, evitando o problema de dual-write.",
+    "evidence": "No fluxo do event-source-distributed-ledger, o ledger consome a movimentação, persiste o evento e os read models transacionais atomicamente numa transação Postgres e só então publica as confirmações nos tópicos downstream. O README descreve explicitamente a publicação Kafka como pós-commit para não cair em dual-write (gravar no banco e no broker de forma não atômica).",
+    "relatedTopics": [
+      "event-sourcing",
+      "messaging-streaming",
+      "saga",
+      "cqrs"
+    ],
+    "relatedPatterns": [
+      "event-sourcing",
+      "transactional-outbox",
+      "domain-event"
+    ],
+    "sourceRefs": [
+      {
+        "kind": "repo",
+        "source": "event-source-distributed-ledger",
+        "locator": "ledger/main.go",
+        "note": "publish pós-commit das confirmações"
+      },
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.467",
+        "note": "Problemas de Dual Write em Transações Saga"
+      }
+    ]
+  },
+  {
+    "id": "e03",
+    "claim": "A idempotência do consumidor é garantida por um identificador único da movimentação (movimentacao_id), de modo que reprocessar a mesma mensagem não duplica efeito.",
+    "evidence": "No ledger, o movimentacao_id é único nos read models. O consumidor de extrato (Mongo) ignora o erro de chave duplicada 11000 ao reinserir o mesmo movimentacao_id, transformando o consumo em operação idempotente — o reprocessamento de uma mensagem já aplicada é absorvido sem duplicar o lançamento.",
+    "relatedTopics": [
+      "event-sourcing",
+      "messaging-streaming",
+      "data-replication"
+    ],
+    "relatedPatterns": [
+      "idempotent-consumer",
+      "event-sourcing"
+    ],
+    "sourceRefs": [
+      {
+        "kind": "repo",
+        "source": "event-source-distributed-ledger",
+        "locator": "statement/consumer.go",
+        "note": "Mongo ignora duplicate-key 11000 por movimentacao_id"
+      },
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.494",
+        "note": "Idempotência em Domínios Complexos"
+      }
+    ]
+  },
+  {
+    "id": "e04",
+    "claim": "A ordem dos eventos por agregado é garantida pela versão no Event Store mais Lightweight Transactions (LWT) no read model, aplicando apenas versões maiores.",
+    "evidence": "O Event Store (Postgres) tem UNIQUE(aggregate_id, version), o que torna a versão por agregado a fonte de ordenação. No read model de saldo em ScyllaDB, o consumidor usa LWT (INSERT IF NOT EXISTS e UPDATE ... IF version < ?), de forma que somente eventos com versão maior do que a já aplicada efetivam mudança — resolvendo Last-Write-Wins por versão, não por relógio.",
+    "relatedTopics": [
+      "event-sourcing",
+      "data-replication",
+      "cqrs"
+    ],
+    "relatedPatterns": [
+      "event-sourcing",
+      "idempotent-consumer"
+    ],
+    "sourceRefs": [
+      {
+        "kind": "repo",
+        "source": "event-source-distributed-ledger",
+        "locator": "balance/consumer.go",
+        "note": "Scylla LWT: UPDATE ... IF version < ?"
+      },
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.492",
+        "note": "Versionamento e Garantias de Ordem (Last-Write-Wins)"
+      }
+    ]
+  },
+  {
+    "id": "e05",
+    "claim": "A Saga existe para resolver transações distribuídas e, principalmente, transações longas, evitando segurar locks por muito tempo num two-phase commit.",
+    "evidence": "O capítulo Saga do workbook trata o problema de lidar com transações distribuídas e o problema específico de transações longas, propondo decompor a operação numa sequência de transações locais com ações e compensações em vez de um lock global de longa duração.",
+    "relatedTopics": [
+      "saga",
+      "microservices-monoliths",
+      "resilience-patterns"
+    ],
+    "relatedPatterns": [
+      "saga",
+      "transactional-outbox",
+      "domain-event"
+    ],
+    "sourceRefs": [
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.454",
+        "note": "O problema de lidar com transações longas"
+      },
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.465",
+        "note": "Modelos de Ação e Compensação no Saga Pattern"
+      },
+      {
+        "kind": "reference",
+        "source": "microservices.io",
+        "locator": "patterns/data/saga.html"
+      }
+    ]
+  },
+  {
+    "id": "e06",
+    "claim": "CQRS separa o modelo de escrita (command) do modelo de leitura (query), permitindo otimizar cada lado de forma independente.",
+    "evidence": "O capítulo CQRS do workbook define a separação de responsabilidades entre comando e consulta. O ledger materializa isso: a escrita vai para o Event Store (Postgres) e as leituras saem de read models dedicados — saldo em ScyllaDB e extrato em MongoDB — cada um modelado para seu padrão de consulta.",
+    "relatedTopics": [
+      "cqrs",
+      "event-sourcing",
+      "data-replication",
+      "databases-indexing"
+    ],
+    "relatedPatterns": [
+      "cqrs",
+      "event-sourcing",
+      "domain-event"
+    ],
+    "sourceRefs": [
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.421",
+        "note": "Separação de Responsabilidades"
+      },
+      {
+        "kind": "repo",
+        "source": "event-source-distributed-ledger",
+        "locator": "balance/, statement/",
+        "note": "read models separados (Scylla saldo, Mongo extrato)"
+      }
+    ]
+  },
+  {
+    "id": "e07",
+    "claim": "Event Sourcing persiste a sequência de eventos em vez do estado final; o estado é reconstituído (rehydration) reaplicando os eventos.",
+    "evidence": "O capítulo Event Sourcing contrasta persistência tradicional (guarda o estado atual e perde a trilha) com Event Sourcing (guarda os eventos). O estado, como o saldo de uma conta, é reconstruído reaplicando depósitos, saques, transferências e estornos. O Event Store append-only do ledger é a fonte de verdade da qual os read models se reconstituem.",
+    "relatedTopics": [
+      "event-sourcing",
+      "cqrs",
+      "observability"
+    ],
+    "relatedPatterns": [
+      "event-sourcing",
+      "audit-logging",
+      "domain-event"
+    ],
+    "sourceRefs": [
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.476",
+        "note": "Persistência Tradicional e Event Sourcing"
+      },
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.489",
+        "note": "Reconstituição de Estados e Rehydration"
+      },
+      {
+        "kind": "repo",
+        "source": "event-source-distributed-ledger",
+        "locator": "database/migrations/",
+        "note": "tabela events append-only (UNIQUE aggregate_id, version)"
+      }
+    ]
+  },
+  {
+    "id": "e08",
+    "claim": "Um BFF aplica o padrão API Composition — agrega/orquestra chamadas a vários serviços — e segrega canais por experiência de cliente.",
+    "evidence": "O capítulo BFF do workbook tem as seções 'API Composition Pattern nos BFFs' e 'Segregação de Canais com BFFs', descrevendo o BFF como uma camada que compõe respostas de múltiplos serviços e oferece um backend dedicado por canal (web, mobile, etc.), com blast radius e versionamento de interface próprios.",
+    "relatedTopics": [
+      "bff",
+      "api-gateway",
+      "sync-communication"
+    ],
+    "relatedPatterns": [
+      "backend-for-frontend",
+      "api-composition",
+      "api-gateway"
+    ],
+    "sourceRefs": [
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.203",
+        "note": "API Composition Pattern nos BFFs"
+      },
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.204",
+        "note": "Segregação de Canais com BFFs"
+      },
+      {
+        "kind": "reference",
+        "source": "microservices.io",
+        "locator": "patterns/apigateway/api-composition.html"
+      }
+    ]
+  },
+  {
+    "id": "e09",
+    "claim": "O Circuit Breaker tem três estados — closed, open e half-open — governados por thresholds de falha, timeout e sucesso.",
+    "evidence": "O shard-router parametriza o circuit breaker por CB_FAILURE_THRESHOLD=5 (falhas para abrir), CB_OPEN_TIMEOUT_SEC=30 (tempo aberto antes de testar) e CB_HALF_OPEN_SUCCESS_THRESHOLD=2 (sucessos em half-open para fechar de novo). Esses três parâmetros mapeiam exatamente a máquina de estados closed → open → half-open → closed.",
+    "relatedTopics": [
+      "resilience-patterns",
+      "load-balancing",
+      "microservices-monoliths"
+    ],
+    "relatedPatterns": [
+      "circuit-breaker",
+      "bulkhead",
+      "health-check-api"
+    ],
+    "sourceRefs": [
+      {
+        "kind": "repo",
+        "source": "msc-shard-router",
+        "locator": "main.go",
+        "note": "CB_FAILURE_THRESHOLD / CB_OPEN_TIMEOUT_SEC / CB_HALF_OPEN_SUCCESS_THRESHOLD"
+      },
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.501",
+        "note": "Estratégias e Patterns de Resiliência"
+      }
+    ]
+  },
+  {
+    "id": "e10",
+    "claim": "Uma sharding key mal escolhida gera hot partitions — concentração de carga numa partição — anulando o ganho do particionamento.",
+    "evidence": "O capítulo de Sharding tem a seção 'Sharding Keys e Hot Partitions', explicando que a escolha da chave de particionamento determina a distribuição da carga; uma chave com baixa cardinalidade ou viés concentra acessos numa partição (hot partition). O hash consistente com réplicas virtuais do shard-router é justamente a mitigação implementada.",
+    "relatedTopics": [
+      "sharding-partitioning",
+      "performance-scalability",
+      "data-replication"
+    ],
+    "relatedPatterns": [
+      "consistent-hashing",
+      "database-per-service"
+    ],
+    "sourceRefs": [
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.377",
+        "note": "Sharding Keys e Hot Partitions"
+      },
+      {
+        "kind": "repo",
+        "source": "msc-shard-router",
+        "locator": "pkg/hashring/",
+        "note": "réplicas virtuais diluem hotspots"
+      }
+    ]
+  },
+  {
+    "id": "e11",
+    "claim": "A API transacional forte valida saldo e limite do cliente dentro da transação antes de efetivar a movimentação, com rollback em caso de violação.",
+    "evidence": "A msc-transactions-api faz controle transacional forte de saldo e limite: a movimentação abre transação SQL, lê o saldo atual, valida as regras de saldo/limite e só efetiva (commit) se passar; caso contrário faz rollback. Redis fica no caminho de leitura e há suporte a idempotência e modo ENV=shadow para cenários de rollback.",
+    "relatedTopics": [
+      "cap-acid-base",
+      "databases-indexing",
+      "concurrency-parallelism"
+    ],
+    "relatedPatterns": [
+      "database-per-service",
+      "idempotent-consumer"
+    ],
+    "sourceRefs": [
+      {
+        "kind": "repo",
+        "source": "msc-transactions-api",
+        "locator": "services/",
+        "note": "validação de saldo/limite na transação + rollback"
+      },
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.74",
+        "note": "Modelo ACID — Atomicity, Consistency, Isolation, Durability"
+      }
+    ]
+  },
+  {
+    "id": "e12",
+    "claim": "A observabilidade se apoia em três pilares — métricas, logs e traces — e em frameworks de mercado como USE, RED e Four Golden Signals.",
+    "evidence": "O capítulo de Observabilidade define que a observabilidade é a correlação direta dos três pilares (métricas, logs e traces) e dedica seções aos frameworks USE Method, RED Method e Four Golden Signals. Os repos shard-router e transactions-api expõem métricas Prometheus, materializando o pilar de métricas.",
+    "relatedTopics": [
+      "observability",
+      "resilience-patterns",
+      "performance-scalability"
+    ],
+    "relatedPatterns": [
+      "application-metrics",
+      "distributed-tracing",
+      "health-check-api"
+    ],
+    "sourceRefs": [
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.538",
+        "note": "Três Pilares da Observabilidade: Métricas, Logs e Traces"
+      },
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.551",
+        "note": "USE Method / RED Method / Four Golden Signals"
+      },
+      {
+        "kind": "repo",
+        "source": "msc-shard-router",
+        "locator": "/metrics",
+        "note": "shard_router_requests_total / responses_total (Prometheus)"
+      }
+    ]
+  },
+  {
+    "id": "e13",
+    "claim": "O Bulkhead vem da engenharia naval: anteparas dividem o casco em compartimentos isolados para que um dano não afunde o navio inteiro.",
+    "evidence": "O capítulo Bulkhead descreve as anteparas (bulkheads) como paredes estruturais internas que dividem o casco em compartimentos isolados; se um compartimento é perfurado, apenas ele inunda e a embarcação continua flutuando. O objetivo não é evitar o dano, mas conter sua propagação — princípio portado para software como isolamento de pools de recursos.",
+    "relatedTopics": [
+      "bulkhead",
+      "resilience-patterns",
+      "cell-based"
+    ],
+    "relatedPatterns": [
+      "bulkhead",
+      "circuit-breaker"
+    ],
+    "sourceRefs": [
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.559",
+        "note": "Bulkheads e a Engenharia Naval — anteparas e compartimentos isolados"
+      },
+      {
+        "kind": "repo",
+        "source": "msc-shard-router",
+        "locator": "pkg/sharding/",
+        "note": "isolamento por shard contém falha (bulkhead)"
+      }
+    ]
+  },
+  {
+    "id": "e14",
+    "claim": "A arquitetura cell-based isola estado em células independentes, cada uma com sua própria estratégia de roteamento e direcionamento.",
+    "evidence": "O capítulo Cell-Based define unidades celulares com isolamento de estado e seções dedicadas a 'Isolamento de estado' e 'Estratégias de roteamento e direcionamento para células'. O shard-router é a peça de roteamento dessa tese: roteia requisições para a célula/shard correta de forma determinística por hash consistente.",
+    "relatedTopics": [
+      "cell-based",
+      "bulkhead",
+      "sharding-partitioning"
+    ],
+    "relatedPatterns": [
+      "cell-based-architecture",
+      "consistent-hashing",
+      "bulkhead"
+    ],
+    "sourceRefs": [
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.578",
+        "note": "Isolamento de estado"
+      },
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.579",
+        "note": "Estratégias de roteamento e direcionamento para células"
+      },
+      {
+        "kind": "repo",
+        "source": "msc-shard-router",
+        "locator": "main.go",
+        "note": "roteador da pesquisa de arquitetura celular"
+      }
+    ]
+  },
+  {
+    "id": "e15",
+    "claim": "PACELC estende o CAP: havendo partição (P) escolhe-se entre disponibilidade e consistência; senão (Else) escolhe-se entre latência e consistência.",
+    "evidence": "O capítulo PACELC (Daniel Abadi, 2010) explica que o CAP só fala do comportamento sob partição; o PACELC cobre também a operação normal: se há partição, escolhe-se entre A e C; Else, entre L (latência) e C. O workbook classifica DynamoDB como PA/EL e Google Spanner como PC/EC.",
+    "relatedTopics": [
+      "pacelc",
+      "cap-acid-base",
+      "data-replication"
+    ],
+    "relatedPatterns": [
+      "cqrs",
+      "database-per-service"
+    ],
+    "sourceRefs": [
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.89",
+        "note": "Teorema PACELC vs CAP: P→A/C, Else→L/C"
+      },
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.90",
+        "note": "DynamoDB PA/EL; Spanner PC/EC"
+      }
+    ]
+  },
+  {
+    "id": "e16",
+    "claim": "O Teorema CAP obriga a escolher 2 entre Consistência, Disponibilidade e Tolerância a Partições; sob partição, ou se sacrifica consistência (AP) ou disponibilidade (CP).",
+    "evidence": "O capítulo CAP descreve as combinações 'Escolha 2'. Em CP o sistema prioriza consistência e tolerância a partições, desativando nós inconsistentes (usado em sistemas financeiros e de estoque). Em AP todos os nós permanecem disponíveis sob partição, podendo servir dados desatualizados.",
+    "relatedTopics": [
+      "cap-acid-base",
+      "pacelc",
+      "data-replication"
+    ],
+    "relatedPatterns": [
+      "database-per-service"
+    ],
+    "sourceRefs": [
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.82",
+        "note": "As combinações do Teorema: Escolha 2"
+      },
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.83",
+        "note": "CP prioriza consistência; AP prioriza disponibilidade sob partição"
+      }
+    ]
+  },
+  {
+    "id": "e17",
+    "claim": "Snapshotting otimiza a reconstrução de estado em Event Sourcing: pontos de restauração intermediários evitam reprocessar todo o histórico, sem virar fonte de verdade.",
+    "evidence": "O capítulo Event Sourcing define snapshot como uma 'fotografia' do agregado num ponto, com o índice do último evento aplicado; para reidratar, carrega-se o último snapshot e aplicam-se só os eventos posteriores (ex.: snapshot a cada 10.000 eventos em 1.000.000). Snapshots são artefatos derivados e descartáveis — o Event Store continua sendo o single source of truth.",
+    "relatedTopics": [
+      "event-sourcing",
+      "performance-scalability",
+      "cqrs"
+    ],
+    "relatedPatterns": [
+      "event-sourcing",
+      "audit-logging"
+    ],
+    "sourceRefs": [
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.491",
+        "note": "Snapshotting: pontos de restauração intermediários"
+      },
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.492",
+        "note": "snapshot é derivado/descartável; Event Store é o single source of truth"
+      }
+    ]
+  },
+  {
+    "id": "e18",
+    "claim": "O Scale Cube modela escalabilidade em três eixos: X (réplicas horizontais), Y (decomposição por funcionalidade) e Z (sharding/particionamento de dados).",
+    "evidence": "Baseado em 'The Art of Scalability' (Abbott e Fisher), o capítulo de Performance/Escalabilidade descreve o Scale Cube: Eixo X = escalabilidade horizontal (réplicas idênticas atrás de load balancer, exige stateless), Eixo Y = quebra de funcionalidades em microserviços especializados, Eixo Z = sharding e particionamento de dados.",
+    "relatedTopics": [
+      "performance-scalability",
+      "sharding-partitioning",
+      "microservices-monoliths"
+    ],
+    "relatedPatterns": [
+      "database-per-service",
+      "consistent-hashing"
+    ],
+    "sourceRefs": [
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.366",
+        "note": "The Scale Cube — origem em The Art of Scalability"
+      },
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.367",
+        "note": "Eixo X horizontal, Eixo Y funcionalidades, Eixo Z dados"
+      }
+    ]
+  },
+  {
+    "id": "e19",
+    "claim": "A Lei de Little (L = λ × W) relaciona itens em processamento, taxa de chegada e tempo de permanência, e serve para dimensionar concorrência de qualquer sistema estável.",
+    "evidence": "O capítulo de Capacity Planning apresenta a Lei de Little (John D. C. Little, anos 1960): L = λ × W, onde L é o número médio de itens no sistema, λ a taxa de chegada e W o tempo médio de permanência. Exemplo do livro: 1500 msg/s × 0,05s = 75 processos simultâneos — base para dimensionar consumidores, threads e partições.",
+    "relatedTopics": [
+      "capacity-queueing",
+      "performance-scalability",
+      "concurrency-parallelism"
+    ],
+    "relatedPatterns": [
+      "bulkhead"
+    ],
+    "sourceRefs": [
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.612",
+        "note": "A Lei de Little: L = λ × W"
+      },
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.613",
+        "note": "exemplo L = 1500 × 0.05 = 75 processos concorrentes"
+      }
+    ]
+  },
+  {
+    "id": "e20",
+    "claim": "Blue-Green mantém dois ambientes idênticos e troca o tráfego do Blue (estável) para o Green (novo) de uma vez, com rollback rápido e quase zero downtime.",
+    "evidence": "O capítulo de Deployment descreve Blue-Green como dois ambientes idênticos que diferem só na versão: Blue é a versão produtiva estável, Green a candidata. Após smoke tests/warm-up no Green, o load balancer (ou DNS) redireciona o tráfego instantaneamente; o Blue é mantido um tempo para rollback rápido. Principal desafio: migração/compatibilidade de schema.",
+    "relatedTopics": [
+      "deployment-strategies",
+      "resilience-patterns",
+      "load-balancing"
+    ],
+    "relatedPatterns": [
+      "health-check-api"
+    ],
+    "sourceRefs": [
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.597",
+        "note": "Blue-Green: dois ambientes idênticos, Blue estável / Green candidato"
+      },
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.599",
+        "note": "troca via LB/DNS; desafio é schema migration/rollback"
+      }
+    ]
+  },
+  {
+    "id": "e21",
+    "claim": "Canary Release é um rollout gradual: só uma fração do tráfego vai para a nova versão (canary) e a participação cresce conforme as validações, com rollback a qualquer momento.",
+    "evidence": "O capítulo de Deployment contrasta Canary com Blue-Green: no canary mantêm-se as duas versões (stable e canary) em operação, mas só uma pequena porcentagem do tráfego é dirigida à canary, aumentando gradualmente após validações; mecanismos de rollback cancelam a canary e restauram a stable a qualquer momento. Confirmada a estabilidade, promove-se canary a stable.",
+    "relatedTopics": [
+      "deployment-strategies",
+      "resilience-patterns",
+      "observability"
+    ],
+    "relatedPatterns": [
+      "application-metrics",
+      "health-check-api"
+    ],
+    "sourceRefs": [
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.599",
+        "note": "Canary Release: rollout gradual stable/canary"
+      },
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.600",
+        "note": "incremento gradual de tráfego + rollback; promove canary a stable"
+      }
+    ]
+  },
+  {
+    "id": "e22",
+    "claim": "Atomicidade no ledger: o evento e os read models transacionais são commitados juntos numa única transação Postgres; a publicação Kafka é separada e posterior, para não fundir banco e broker num dual-write.",
+    "evidence": "O fluxo do ledger abre uma transação SQL, persiste o evento com versão (optimistic locking), recalcula o saldo, atualiza os read models internos (accounts/transactions) e commita tudo junto; só depois publica as confirmações nos tópicos de saída. O acoplamento atômico fica no Postgres e o broker recebe apenas o que já foi confirmado.",
+    "relatedTopics": [
+      "event-sourcing",
+      "cqrs",
+      "cap-acid-base",
+      "messaging-streaming"
+    ],
+    "relatedPatterns": [
+      "event-sourcing",
+      "transactional-outbox",
+      "domain-event"
+    ],
+    "sourceRefs": [
+      {
+        "kind": "repo",
+        "source": "event-source-distributed-ledger",
+        "locator": "ledger/main.go",
+        "note": "evento + read models transacionais commitam juntos; publish é pós-commit"
+      },
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.467",
+        "note": "Problemas de Dual Write em Transações Saga"
+      }
+    ]
+  },
+  {
+    "id": "e23",
+    "claim": "Há duas abordagens distintas (não fundidas) para movimentação financeira: controle transacional forte (consistência imediata) e event-sourced/CQRS (consistência eventual entre stores).",
+    "evidence": "A msc-transactions-api resolve débito/crédito com transação SQL forte e validação imediata de saldo/limite (consistência forte). O event-source-distributed-ledger resolve o mesmo domínio com Event Sourcing + CQRS, onde Postgres é a fonte de verdade e os read models (Scylla/Mongo) são atualizados de forma assíncrona (consistência eventual). São trade-offs diferentes para o mesmo problema, comparados explicitamente pelo Lab.",
+    "relatedTopics": [
+      "cap-acid-base",
+      "cqrs",
+      "event-sourcing",
+      "data-replication"
+    ],
+    "relatedPatterns": [
+      "database-per-service",
+      "cqrs",
+      "event-sourcing"
+    ],
+    "sourceRefs": [
+      {
+        "kind": "repo",
+        "source": "msc-transactions-api",
+        "locator": "services/",
+        "note": "consistência forte: valida saldo/limite na transação"
+      },
+      {
+        "kind": "repo",
+        "source": "event-source-distributed-ledger",
+        "locator": "README",
+        "note": "consistência eventual: Postgres source of truth, read models async"
+      },
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.78",
+        "note": "Modelo BASE — Eventual Consistency"
+      }
+    ]
+  },
+  {
+    "id": "e24",
+    "claim": "O Event Store append-only com UNIQUE(aggregate_id, version) é, ao mesmo tempo, a fonte de ordenação e uma trilha de auditoria natural do domínio.",
+    "evidence": "A tabela events do ledger é append-only com aggregate_id (UUID), version (INT), event_type e event_data (JSONB), e a constraint UNIQUE(aggregate_id, version) garante a ordenação por agregado. Por nunca sobrescrever, o histórico completo de eventos vira trilha de auditoria reconstituível — útil para domínios que exigem rastreabilidade auditável (contábil, farmacêutico, prontuário).",
+    "relatedTopics": [
+      "event-sourcing",
+      "observability",
+      "databases-indexing"
+    ],
+    "relatedPatterns": [
+      "event-sourcing",
+      "audit-logging",
+      "domain-event"
+    ],
+    "sourceRefs": [
+      {
+        "kind": "repo",
+        "source": "event-source-distributed-ledger",
+        "locator": "database/migrations/",
+        "note": "events append-only, UNIQUE(aggregate_id, version)"
+      },
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.490",
+        "note": "reaplicação sequencial de eventos para reconstituição auditável"
+      }
+    ]
+  }
+]

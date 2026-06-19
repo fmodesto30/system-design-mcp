@@ -1,0 +1,1893 @@
+[
+  {
+    "id": "broken-windows",
+    "title": "Teoria das Janelas Quebradas na Engenharia de Software",
+    "category": "Fundamentos",
+    "summary": "Analogia criminológica aplicada a times de software: pequenas negligências toleradas (sem testes, sem code review, gambiarras) sinalizam que qualidade não importa e degradam progressivamente a base de código e a cultura de engenharia.",
+    "detailedExplanation": "A Teoria das Janelas Quebradas vem da criminologia (Wilson e Kelling, 1982) e é frequentemente ilustrada pelo experimento de Zimbardo (1969): dois carros idênticos abandonados, um no Bronx e outro em Palo Alto. O do Bronx foi vandalizado quase imediatamente; o de Palo Alto ficou intacto até que o próprio pesquisador quebrou uma janela com um martelo — a partir daí ele também foi destruído. A lição é que o gatilho do vandalismo não é a pobreza do local, mas o sinal visível de desordem e descuido: quando uma norma é quebrada e ninguém repara, as pessoas concluem que não há consequências e passam a desrespeitar outras normas.\n\nTransposta para a engenharia de software (sem rigor acadêmico — é um ensaio de opinião do autor), a janela quebrada é qualquer pequeno descuido tolerado: ausência de cultura de code review e testes, falta de styleguide, código comentado e esquecido, duplicação, regras de negócio confusas. Esses sinais corroem o senso de responsabilidade do time. Em médio e longo prazo, a base perde conhecimento, as responsabilidades ficam mal definidas e a moral despenca. Pior: engenheiros que convivem com esse padrão o carregam para outros projetos, propagando uma cultura inconsciente de 'dar um jeitinho'. O mesmo vale para governança — pipelines com brechas para pular steps, excesso de intervenção manual em processos automatizados, drifts em infraestrutura como código.\n\nO ponto central para System Design é que a tolerância ao 'suficientemente bom' é a porta de entrada para a degradação não só de um projeto, mas de toda a cultura de engenharia da organização. O antídoto é reparar a janela rápido e na causa raiz: code review rigoroso, testes automatizados, documentação adequada e adesão a padrões — aceitando o trade-off de perder uma 'falsa impressão de agilidade' que se cria ao burlar regras. Mais do que ferramentas, é preciso fomentar responsabilidade coletiva sobre o trabalho bem feito, revisitada constantemente.",
+    "relatedTopics": [
+      "microservices-monoliths",
+      "observability",
+      "deployment-strategies"
+    ],
+    "relatedPatterns": [],
+    "tradeOffs": [
+      {
+        "dimension": "Velocidade percebida",
+        "pro": "Burlar regras (pular testes, code review) dá uma sensação imediata de agilidade",
+        "con": "Essa agilidade é falsa: o débito acumulado torna o sistema mais lento de evoluir e mais caro de manter no médio prazo"
+      },
+      {
+        "dimension": "Disciplina de processo",
+        "pro": "Reparar a janela na causa raiz preserva a saúde técnica e a moral do time",
+        "con": "Exige investimento contínuo em rigor (review, testes, docs) que não entrega feature visível no curto prazo"
+      }
+    ],
+    "interviewAngle": "Raramente é pedido diretamente, mas aparece como 'soft skill' de Staff/Principal: o entrevistador quer ver se você liga decisões técnicas a saúde de longo prazo e cultura. Use para justificar por que gates de qualidade (CI verde, review obrigatório, observabilidade) não são burocracia, mas contenção de degradação. Bom para responder 'como você mantém a qualidade de um sistema que cresce?'.",
+    "example": "Um monolito de backoffice que começa sem testes de integração: cada hotfix urgente abre precedente para o próximo 'jeitinho'. Seis meses depois, ninguém sabe mais a regra de cálculo de saldo e qualquer mudança vira risco — o oposto do rigor transacional exigido por um sistema como o event-source-distributed-ledger, onde a invariante de versão por agregado é defendida por contrato (UNIQUE(aggregate_id, version)).",
+    "diagrams": [],
+    "sourceRefs": [
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.19",
+        "note": "Capítulo de abertura: Teoria das Janelas Quebradas, experimento de Zimbardo"
+      },
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.22"
+      },
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.23",
+        "note": "Antídotos: code review, testes, documentação, padrões"
+      }
+    ]
+  },
+  {
+    "id": "network-protocols",
+    "title": "Protocolos e Comunicação de Rede (Modelo OSI, TCP, UDP, TLS, DNS)",
+    "category": "Fundamentos",
+    "summary": "Base de rede para System Design: o modelo OSI de 7 camadas, os protocolos de transporte TCP (confiável, orientado a conexão) e UDP (rápido, sem garantia), e protocolos de aplicação como TLS e DNS que sustentam toda comunicação entre serviços.",
+    "detailedExplanation": "O Modelo OSI (ISO, anos 1980) é uma abstração conceitual em 7 camadas que serve para classificar onde cada protocolo opera: Física (cabos, Wi-Fi), Enlace (Ethernet, MAC), Rede (IP, roteamento, IPv4/IPv6, ARP), Transporte (TCP, UDP), Sessão (conexões de longa duração), Apresentação (SSL/TLS, compressão, JPEG/PNG) e Aplicação (HTTP, gRPC, WebSockets, SSH, FTP). As camadas mais altas normalmente são implementadas em software. Entender o OSI ajuda a mapear mentalmente cada protocolo e a fazer troubleshooting de comunicação entre serviços.\n\nOs dois protocolos-base de transporte são TCP e UDP. O UDP é simples e não confiável: segmenta dados em datagramas, não estabelece conexão e não confirma recebimento — sacrifica confiabilidade por performance. É a analogia do entregador que deixa a correspondência na calçada e segue em frente. Serve para tempo quase real tolerante a perdas (streaming, telemetria). O TCP é orientado à conexão: abre, mantém, verifica e encerra a conexão garantindo entrega íntegra e ordenada. Usa o three-way handshake (SYN → SYN-ACK → ACK) para abrir, numera segmentos sequencialmente, reenvia o que não recebe ACK, e encerra com o four-way handshake (FIN). É o entregador que exige assinatura e foto. A maioria dos protocolos entre serviços é construída sobre TCP justamente pela confiabilidade, ao custo de mais 'burocracia' e latência.\n\nNa camada de aplicação ficam protocolos críticos. O TLS (sucessor do SSL) garante privacidade e integridade via handshake que negocia versão e cifras e produz uma chave de sessão única; TLS 1.3 reduz o handshake e é a versão mais segura. O DNS é a 'lista telefônica' da internet: traduz nomes (fidelissauro.dev) em IPs por uma hierarquia — cache local → resolver → servidores raiz (13 conjuntos, a.root-servers.net..m) → servidores TLD (.dev) → servidor autoritativo do domínio. A pergunta clássica 'o que acontece quando você digita google.com?' explora exatamente essa cadeia. Para System Design, a escolha TCP vs UDP e o conhecimento de TLS/DNS impactam diretamente latência (handshakes), resiliência e custo de conexão.",
+    "relatedTopics": [
+      "sync-communication",
+      "load-balancing",
+      "api-gateway",
+      "caching"
+    ],
+    "relatedPatterns": [],
+    "tradeOffs": [
+      {
+        "dimension": "Confiabilidade vs latência (TCP vs UDP)",
+        "pro": "TCP garante ordem e integridade — ideal para comunicação entre serviços",
+        "con": "O handshake e os ACKs adicionam latência e overhead; UDP é mais rápido mas pode perder/corromper pacotes"
+      },
+      {
+        "dimension": "Segurança vs custo de handshake (TLS)",
+        "pro": "TLS criptografa o tráfego ponta a ponta e impede interceptação",
+        "con": "A negociação de chaves adiciona round-trips; mitigado por TLS 1.3 e reuso de sessão"
+      }
+    ],
+    "interviewAngle": "Aparece como aquecimento ('o que acontece quando você digita uma URL?') e em decisões de protocolo: escolher gRPC/HTTP2 sobre TCP vs um stream UDP para telemetria. Saiba situar cada protocolo na camada OSI, explicar o three-way handshake e por que TLS offloading no load balancer (Layer 7) reduz carga nos backends. Mostrar que latência de DNS e de handshake TCP/TLS importa em sistemas de baixa latência sinaliza senioridade.",
+    "example": "Um load balancer Layer 4 só vê IP e porta (TCP/UDP) e encaminha pacotes sem interpretar o payload — rapidíssimo. Já um Layer 7 entende HTTP e faz SSL/TLS offloading, retirando o custo do handshake TLS dos backends. O shard-router (msc-shard-router) opera acima disso, lendo um header HTTP (id_client) para rotear — algo só possível na camada de aplicação.",
+    "diagrams": [],
+    "sourceRefs": [
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.24",
+        "note": "Modelo OSI, 7 camadas"
+      },
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.30",
+        "note": "UDP - User Datagram Protocol"
+      },
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.33",
+        "note": "TCP three-way e four-way handshake"
+      },
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.35",
+        "note": "TLS handshake e chave de sessão"
+      },
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.37",
+        "note": "DNS e resolução hierárquica"
+      }
+    ]
+  },
+  {
+    "id": "storage-raid",
+    "title": "Storage, RAID e Sistemas de Arquivos",
+    "category": "Dados",
+    "summary": "Métricas de armazenamento (throughput, bandwidth, IOPS), modelos de storage (DAS, NAS, Block, File, Object) e níveis de RAID (0,1,5,6,10) que combinam discos para equilibrar performance, redundância e custo.",
+    "detailedExplanation": "Storage é a persistência organizada e recuperável de dados, com trade-offs estratégicos entre desempenho, segurança, latência e escalabilidade. As métricas-base são: Throughput (volume de dados transferido por tempo, MB/s ou GB/s), Bandwidth (teto de throughput do canal), I/O (uma operação isolada de leitura ou escrita) e IOPS (operações de I/O por segundo). Monitorar IOPS é essencial para detectar throttling e saturação e dimensionar corretamente sem super ou subdimensionar.\n\nOs modelos de storage variam no acoplamento e na forma de acesso. DAS (Direct-Attached Storage) é o disco preso direto ao host via SATA/USB/NVMe: mínima latência, mas escalabilidade horizontal difícil. NAS (Network Attached Storage) expõe File Storage pela rede (NFS, SMB) para múltiplos clientes simultâneos — limitado pela latência de rede. Block Storage trata o volume como blocos endereçáveis de tamanho fixo formatáveis em ext4/FAT etc., como um disco virtual particionável. File Storage organiza dados em hierarquia de pastas com metadados (nome, dono, datas). Object Storage (S3, Azure Blob, GCS, MinIO, Ceph) trata cada dado como um objeto com metadados e ID único, acessado por API — escalabilidade, durabilidade e desacoplamento altíssimos, ideal para cloud native sensível a escala horizontal.\n\nRAID (Redundant Array of Independent Disks) combina múltiplos discos físicos em um volume lógico, variando o foco entre performance e tolerância a falhas. RAID 0 (striping) distribui dados entre discos para máxima performance, mas perde tudo se um disco falhar — capacidade = soma de todos. RAID 1 (mirroring) espelha cada disco, priorizando confiabilidade ao custo de capacidade. RAID 5 (striping com paridade distribuída, mínimo 3 discos) equilibra performance e segurança, tolera a perda de 1 disco — capacidade = soma menos 1 disco. RAID 6 adiciona dupla paridade, tolera 2 falhas simultâneas — capacidade = soma menos 2 discos. RAID 10 (1+0) combina espelhamento e striping: alta disponibilidade e performance, mas perde 50% da capacidade para redundância — recomendado para sistemas financeiros, hospitalares e cargas transacionais críticas.",
+    "relatedTopics": [
+      "databases-indexing",
+      "data-replication",
+      "spof-dr",
+      "performance-scalability"
+    ],
+    "relatedPatterns": [],
+    "tradeOffs": [
+      {
+        "dimension": "Performance vs durabilidade (RAID 0 vs 1)",
+        "pro": "RAID 0 soma o throughput de todos os discos com striping paralelo",
+        "con": "Sem nenhuma redundância: a falha de um único disco perde todos os dados"
+      },
+      {
+        "dimension": "Tolerância a falhas vs capacidade (RAID 10)",
+        "pro": "RAID 10 tolera falhas simultâneas (fora do mesmo par espelhado) com alta performance",
+        "con": "Custo alto: 50% da capacidade total é consumida só em redundância"
+      },
+      {
+        "dimension": "Acesso direto vs escala horizontal (DAS vs Object)",
+        "pro": "DAS dá latência mínima por acesso local ao filesystem",
+        "con": "Não escala horizontalmente; Object Storage escala mas paga latência de rede e intermediação cliente-servidor"
+      }
+    ],
+    "interviewAngle": "Menos comum em entrevistas de System Design de alto nível, mas aparece quando você precisa justificar a camada de persistência: por que um banco transacional crítico roda em RAID 10, por que assets estáticos vão para Object Storage (S3) servido por CDN, e como IOPS limita o throughput de escrita de um banco. Saber calcular capacidade útil de cada RAID demonstra fundamento.",
+    "example": "Um sistema financeiro como o msc-transactions-api colocaria o PostgreSQL em volumes com RAID 10 para combinar performance de escrita e tolerância a falha sem perda transacional, enquanto exportações e relatórios estáticos iriam para Object Storage barato e escalável. IOPS é o teto que define quantas operações de débito/crédito por segundo o disco sustenta antes de enfileirar.",
+    "diagrams": [],
+    "sourceRefs": [
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.55",
+        "note": "Definição de storage e dimensões"
+      },
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.57",
+        "note": "Throughput, bandwidth, I/O e IOPS"
+      },
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.59",
+        "note": "DAS, NAS, Block, File, Object Storage"
+      },
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.64",
+        "note": "RAID 0,1,5,6,10 e cálculo de capacidade"
+      }
+    ]
+  },
+  {
+    "id": "cap-acid-base",
+    "title": "Teorema CAP, ACID e BASE",
+    "category": "Dados",
+    "summary": "CAP (Brewer, 2000) afirma que um banco distribuído só entrega 2 de 3 entre Consistência, Disponibilidade e Tolerância a Partições; ACID (transacional, SQL) e BASE (flexível, NoSQL) são os dois modelos de garantia que ancoram essa escolha — e o próprio Brewer relativizou o 'escolha 2' em 2012.",
+    "detailedExplanation": "O Teorema CAP, proposto por Eric Brewer em 2000, afirma que um banco de dados distribuído só pode entregar simultaneamente dois dos três atributos: **Consistency** (todos os nós retornam sempre a versão mais recente do dado), **Availability** (toda requisição recebe resposta, mesmo que o dado não seja o mais atual) e **Partition Tolerance** (o sistema continua operando mesmo quando uma falha de rede particiona o cluster em partes que não se comunicam). A analogia popular é 'Bom, Rápido e Barato: escolha 2'. Uma partição de rede é uma falha sistêmica de comunicação entre nós que gera inconsistência temporária — especialmente complexa quando a escrita é distribuída.\n\nPara entender CAP é preciso dominar ACID e BASE, os dois polos de garantia. **ACID** (Atomicity, Consistency, Isolation, Durability) descreve bancos transacionais (SQL tradicionais), que priorizam precisão e confiabilidade. Atomicidade trata a transação como unidade indivisível (tudo confirma ou nada confirma — ex.: decrementar estoque e registrar venda juntos). Consistência leva o banco de um estado válido a outro válido, respeitando foreign keys, tipos e constraints. Isolamento garante que transações concorrentes não interfiram (prevenindo dirty reads, non-repeatable reads e phantom reads), com o trade-off de que isolamento alto reduz concorrência. Durabilidade garante que o commit persiste mesmo após falha. **BASE** (Basically Available, Soft State, Eventual Consistency) é a abordagem flexível dos NoSQL (Dynamo, Cassandra, MongoDB): maximiza disponibilidade e tolerância a falhas via particionamento e replicação, aceita que o estado pode mudar sozinho (TTL, expiração) e que diferentes nós podem divergir temporariamente até convergirem (consistência eventual).\n\nAs combinações do CAP definem perfis: **CP** (consistência + tolerância a partições, sacrifica disponibilidade — desativa nós inconsistentes até restaurar; ex.: MongoDB, etcd, Consul, HBase) para dados críticos e atômicos; **AP** (disponibilidade + tolerância a partições, sacrifica consistência — todos os nós respondem mesmo com dado desatualizado; ex.: DynamoDB, CouchDB, Cassandra em certas configs) para e-commerce, redes sociais, busca; **CA** (consistência + disponibilidade, sensível a partições — pode ficar inoperante numa falha de rede; ex.: PostgreSQL, MySQL, Redis standalone) típico de bancos SQL centralizados. Em 2012, no artigo 'CAP Twelve Years Later', Brewer desmistificou o 'escolha 2': consistência e disponibilidade não são estados binários on/off, mas espectros contínuos (disponibilidade de 0 a 100%, vários níveis de consistência), e partições de rede são eventos relativamente raros — na maior parte do tempo o sistema opera sem partição e pode otimizar C e A juntas. CAP é ótimo para discussões iniciais, mas é uma simplificação enganosa para sistemas modernos.",
+    "relatedTopics": [
+      "pacelc",
+      "databases-indexing",
+      "data-replication",
+      "sharding-partitioning",
+      "saga"
+    ],
+    "relatedPatterns": [
+      "database-per-service",
+      "cqrs",
+      "saga"
+    ],
+    "tradeOffs": [
+      {
+        "dimension": "Consistência vs disponibilidade sob partição",
+        "pro": "CP garante que nenhum cliente leia dado obsoleto — essencial em finanças e estoque",
+        "con": "Para isso o sistema fica indisponível (desativa nós inconsistentes) durante a partição"
+      },
+      {
+        "dimension": "ACID vs BASE",
+        "pro": "ACID dá atomicidade e consistência forte por padrão; BASE dá escalabilidade horizontal e alta disponibilidade",
+        "con": "ACID custa latência e dificulta escala horizontal; BASE expõe a aplicação a inconsistências temporárias e exige resolução de conflitos"
+      },
+      {
+        "dimension": "Modelo 'escolha 2' vs realidade",
+        "pro": "O 'escolha 2' é didático para discussões iniciais de arquitetura",
+        "con": "Brewer (2012) mostrou que é enganoso: C e A são espectros e partições são raras — fora delas dá para otimizar ambas"
+      }
+    ],
+    "interviewAngle": "Quase obrigatório em qualquer entrevista de System Design com componente de dados. Espera-se que você classifique a escolha do banco pelo requisito de negócio (saldo bancário → CP/ACID; feed/carrinho → AP/BASE), explique o que é uma partição de rede e — sinal de senioridade — relativize o 'escolha 2' citando que partições são raras e que C/A são espectros. Não decore só a sigla: amarre cada letra a uma consequência operacional concreta.",
+    "example": "No event-source-distributed-ledger, o Event Store em PostgreSQL é o lado CP/ACID: a invariante UNIQUE(aggregate_id, version) e o commit transacional garantem consistência forte da fonte da verdade. Já os read models em ScyllaDB (saldo) e MongoDB (extrato) são atualizados de forma assíncrona após o commit — lado AP/BASE, eventualmente consistente, otimizado para leitura e disponibilidade.",
+    "diagrams": [
+      "event-sourced-ledger-flow"
+    ],
+    "sourceRefs": [
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.72",
+        "note": "Teorema CAP (Brewer 2000)"
+      },
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.74",
+        "note": "Modelo ACID detalhado"
+      },
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.78",
+        "note": "Modelo BASE"
+      },
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.83",
+        "note": "Combinações CP, AP, CA"
+      },
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.86",
+        "note": "CAP Twelve Years Later (Brewer 2012)"
+      },
+      {
+        "kind": "repo",
+        "source": "event-source-distributed-ledger",
+        "locator": "ledger/ — Event Store Postgres (CP) vs read models async (AP)"
+      }
+    ]
+  },
+  {
+    "id": "pacelc",
+    "title": "Teorema PACELC",
+    "category": "Dados",
+    "summary": "Extensão do CAP (Abadi, 2010): se há Partição (P) escolhe-se entre Disponibilidade (A) e Consistência (C); senão (Else) escolhe-se entre Latência (L) e Consistência (C). Cobre a lacuna do CAP sobre como o sistema se comporta quando NÃO há falha de rede.",
+    "detailedExplanation": "O Teorema PACELC, proposto por Daniel Abadi em 2010 (Yale), complementa e amplia o CAP. O CAP só descreve o que fazer durante uma partição de rede (escolher entre C e A), mas deixa em aberto uma pergunta crucial: o que o sistema deve priorizar quando está funcionando normalmente, sem partições? O PACELC responde com o racional: **se há Partição (P), escolhe-se entre Disponibilidade (A) e Consistência (C); Else (E) — sem partição — escolhe-se entre Latência (L) e Consistência (C)**. Ou seja, mesmo em condições normais ainda há um trade-off difícil: ou se garante consistência forte pagando mais latência (esperar todas as réplicas confirmarem), ou se aceita consistência mais fraca para reduzir o tempo de resposta.\n\nIsso aproxima o modelo da realidade de sistemas geograficamente distribuídos com replicação e sharding. Imagine um banco global: garantir que todas as réplicas estejam sincronizadas antes de confirmar cada escrita (consistência forte) torna cada operação mais lenta pela latência de rede; aceitar consistência eventual responde mais rápido, mas um usuário no Brasil pode ver um dado diferente de outro na Espanha por algum tempo. CAP e PACELC não são excludentes, mas complementares: o PACELC analisa tanto a falha quanto a operação normal.\n\nNa prática, o PACELC classifica sistemas em quatro combinações. **PA/EL**: sob partição prioriza disponibilidade, e em condições normais prioriza latência (consistência eventual por padrão) — DynamoDB, Cassandra, Kafka, Redis em cluster. **PC/EL**: sob partição prioriza consistência (pode ficar indisponível até recuperar consenso), mas em operação normal prioriza latência/throughput — escolha intermediária para sistemas sem resolução de conflito confiável em grande volume. **PA/EC**: em operação normal prioriza consistência forte (todas as réplicas iguais), mas sob falha prioriza disponibilidade (aceita divergências) — costuma exigir CRDTs (Conflict-Free Replicated Data Types); modelo menos comum, híbrido. **PC/EC**: prioriza consistência sempre, em partição e em operação normal, aceitando maior latência e preferindo falhar a operar inconsistente — bancos SQL tradicionais, etcd, ZooKeeper, CockroachDB e Google Spanner (que usa TrueTime para consistência serializável global). Exemplos de mercado: DynamoDB e Cassandra são PA/EL; Spanner, etcd, CockroachDB e RDS Multi-AZ são PC/EC; MongoDB varia (PA/EL ou PC/EL conforme write/read concern); Azure Cosmos DB é PA/ELC, com 5 níveis de consistência configuráveis.",
+    "relatedTopics": [
+      "cap-acid-base",
+      "data-replication",
+      "sharding-partitioning",
+      "databases-indexing",
+      "cqrs"
+    ],
+    "relatedPatterns": [
+      "cqrs",
+      "database-per-service"
+    ],
+    "tradeOffs": [
+      {
+        "dimension": "Consistência vs latência (sem partição)",
+        "pro": "Consistência forte (EC) garante que todas as réplicas mostram a última versão",
+        "con": "Esperar o quórum/replicação síncrona aumenta a latência de cada operação, ainda mais geodistribuído"
+      },
+      {
+        "dimension": "Disponibilidade vs consistência (com partição)",
+        "pro": "PA mantém o sistema respondendo durante falha de rede",
+        "con": "Réplicas podem divergir; exige resolução de conflito (last-write-wins, CRDT) depois"
+      },
+      {
+        "dimension": "Granularidade da escolha",
+        "pro": "Sistemas como Cosmos DB e MongoDB permitem ajustar o trade-off por operação (write/read concern, níveis de consistência)",
+        "con": "Configurabilidade aumenta a chance de erro de configuração e de comportamento inconsistente entre rotas"
+      }
+    ],
+    "interviewAngle": "Diferenciador de senioridade: depois de citar CAP, mostrar que você sabe que a decisão também existe FORA da partição (latência vs consistência) impressiona. Saiba classificar exemplos canônicos — DynamoDB = PA/EL, Spanner = PC/EC — e explicar por que um banco global de saldo é PC/EC (prefere falhar a mostrar saldo errado) enquanto um carrinho é PA/EL. Conecte L à latência de replicação síncrona e à geografia.",
+    "example": "Um ledger financeiro como o event-source-distributed-ledger se aproxima de PC/EC na fonte da verdade: o Event Store em PostgreSQL prefere consistência forte e aceita a latência do commit. Já as read models distribuídas (Scylla/Mongo) operam mais perto de PA/EL — disponíveis e de baixa latência, eventualmente consistentes, com ordenação garantida por versão e LWT (INSERT IF NOT EXISTS / UPDATE IF version < ?).",
+    "diagrams": [],
+    "sourceRefs": [
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.88",
+        "note": "PACELC (Abadi 2010), lacuna do CAP"
+      },
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.89",
+        "note": "Racional P->A/C ; E->L/C"
+      },
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.90",
+        "note": "DynamoDB PA/EL, Spanner PC/EC"
+      },
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.95",
+        "note": "Tabela comparativa de flavors PACELC"
+      },
+      {
+        "kind": "repo",
+        "source": "event-source-distributed-ledger",
+        "locator": "balance/ (Scylla, LWT) — ordenação por versão em read model eventualmente consistente"
+      }
+    ]
+  },
+  {
+    "id": "databases-indexing",
+    "title": "Databases, Modelos de Dados e Indexação",
+    "category": "Dados",
+    "summary": "Tipos de banco (SQL, NoSQL, NewSQL, in-memory, time-series, grafos), níveis de consistência (forte vs eventual) e estruturas de armazenamento e indexação (page size, colunar, LSM-Tree, B-Tree, hashing, índices invertidos) — escolhidos como um 'racional de features' por cenário (transacional, write-intensive, read-intensive).",
+    "detailedExplanation": "Escolher um banco é tratar a decisão como um 'racional de features': cada tipo agrega ou ofende performance, consistência e custo conforme o requisito. **SQL** (relacional, Codd 1970): tabelas, schema rígido, integridade referencial e garantias ACID — ideal para entidades com relacionamentos e transações. **NoSQL** (Not Only SQL): schemas flexíveis (chave-valor, JSON/BSON, grafos), sem joins, frequentemente consistência eventual em troca de escala horizontal — embute dados para evitar joins custosos, ao custo de risco de inconsistência de contrato. **NewSQL** concilia os dois mundos: garantias ACID relacionais com sharding/replicação transparentes via protocolos de consenso (Raft/Paxos). **In-memory** (Redis, Memcached): dados na RAM (nanossegundos vs milissegundos em disco), modelo chave-valor simples, ótimo para cache, com o trade-off da não durabilidade. **Time-Series** (TSDB): append-only com indexação por tempo, para observabilidade, métricas e IoT — alta ingestão, analítico, não transacional. **Grafos**: tratam relacionamentos como objetos de primeira classe para recomendação, fraude e redes sociais sem joins.\n\nOs **níveis de consistência** são o eixo central em sistemas distribuídos. **Consistência forte** (linearizabilidade): toda leitura, em qualquer réplica ou região, reflete a última escrita confirmada; alcançada por consenso (Paxos, Raft) ou commit síncrono em quórum, ao custo de latência e I/O. **Consistência eventual**: replicação assíncrona; só um nó ou pequeno quórum confirma a escrita e o resto propaga via logs — leituras em nós atrasados podem retornar dados obsoletos, exigindo resolução de conflito (last-write-wins por timestamp, ou CRDTs). A regra prática do autor: tudo que não é consistência forte é, de alguma forma, eventual.\n\nA **indexação** define o desempenho de escrita e leitura. **Page Size**: bancos orientados a linha guardam tuplas em páginas de tamanho fixo (4/8/16 KB) — páginas maiores favorecem leitura sequencial, menores favorecem consultas pontuais. **Indexação colunar** (Redshift, BigQuery): cada coluna em segmento contíguo, reduz I/O em analytics e permite compressão alta por dicionário. **LSM-Tree** (Cassandra, DynamoDB, Scylla, InfluxDB, BigTable): escreve primeiro em memtables na memória e depois descarrega em sstables imutáveis (append-only); deleção via tombstone, com compactação posterior — extrema performance de escrita, ideal para ledgers/auditoria e write-intensive. **B-Tree**: árvore multi-way autobalanceada, buscas e ranges em tempo logarítmico com poucos I/Os — padrão de bancos transacionais para chaves primárias e secundárias. **Hashing**: localização instantânea por exact match (não serve para ranges). **Índices invertidos** (Elasticsearch, Solr, full-text em Postgres): mapeiam termos→documentos para full-text search. A escolha se cristaliza por cenário: **transacional** (consistência forte, ACID, B-Tree, SQL/NewSQL); **write-intensive** (NoSQL, LSM-Tree, replicação assíncrona, consistência eventual); **read-intensive** (réplicas de leitura + cache + CQRS sobre um primário consistente).",
+    "relatedTopics": [
+      "cap-acid-base",
+      "pacelc",
+      "caching",
+      "data-replication",
+      "cqrs",
+      "sharding-partitioning"
+    ],
+    "relatedPatterns": [
+      "cqrs",
+      "database-per-service",
+      "event-sourcing"
+    ],
+    "tradeOffs": [
+      {
+        "dimension": "B-Tree vs LSM-Tree",
+        "pro": "B-Tree dá leitura e range eficientes; LSM-Tree dá escrita sequencial append-only de altíssimo throughput",
+        "con": "B-Tree pode exigir I/O custoso em escrita/atualização; LSM-Tree paga compactação em background e tende à consistência eventual"
+      },
+      {
+        "dimension": "SQL vs NoSQL",
+        "pro": "SQL dá integridade referencial e ACID; NoSQL dá schema flexível e escala horizontal",
+        "con": "SQL escala vertical (hardware caro) ou paga consenso no NewSQL; NoSQL empurra a validação de contrato para a aplicação e arrisca inconsistência"
+      },
+      {
+        "dimension": "Consistência forte vs eventual",
+        "pro": "Forte garante leitura imediata da última escrita; eventual maximiza disponibilidade e performance",
+        "con": "Forte aumenta latência de commit com o nº de réplicas; eventual exige estratégias de resolução de conflito (LWW, CRDT)"
+      }
+    ],
+    "interviewAngle": "Núcleo de qualquer entrevista de dados. Você precisa escolher o banco a partir do padrão de acesso (transacional/write-intensive/read-intensive) e justificar a estrutura de índice (por que LSM-Tree para ingestão massiva, por que B-Tree para chave primária, por que índice invertido para busca). Bônus: combinar um primário consistente com réplicas de leitura, cache e CQRS para read-intensive, isolando a golden source de picos.",
+    "example": "O msc-transactions-api usa PostgreSQL (B-Tree, ACID) como golden source transacional de saldo/limite, com Redis como cache de leitura. Já o event-source-distributed-ledger combina três engines por cenário: PostgreSQL (Event Store, fonte da verdade), ScyllaDB (LSM-Tree, read model de saldo write/read-intensive) e MongoDB (read model de extrato) — cada um escolhido pelo 'racional de features' do seu acesso.",
+    "diagrams": [
+      "cqrs"
+    ],
+    "sourceRefs": [
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.99",
+        "note": "Tipos de banco: SQL, NoSQL, NewSQL, in-memory, time-series"
+      },
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.106",
+        "note": "Consistência forte vs eventual"
+      },
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.117",
+        "note": "Page size e indexação colunar"
+      },
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.118",
+        "note": "LSM-Tree (memtables, sstables, tombstone)"
+      },
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.120",
+        "note": "B-Tree e hashing"
+      },
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.124",
+        "note": "Cenários transacional, write-intensive, read-intensive"
+      },
+      {
+        "kind": "repo",
+        "source": "event-source-distributed-ledger",
+        "locator": "Postgres (Event Store), ScyllaDB (LSM, saldo), MongoDB (extrato)"
+      }
+    ]
+  },
+  {
+    "id": "caching",
+    "title": "Estratégias de Cache",
+    "category": "Dados",
+    "summary": "Cache é uma camada intermediária de dados entre dois componentes que reduz latência e carga sobre a origem. Envolve princípios (TTL, evicção LRU/LFU/FIFO, hit/miss/hit rate, invalidação/consistência) e estratégias (cache-aside, write-through, write-behind) além de implementações (in-memory, distribuído, CDN).",
+    "detailedExplanation": "Cache é uma técnica de otimização que cria uma camada intermediária para armazenar temporariamente dados custosos ou demorados de obter da origem — resultados de query, respostas de dependências, assets ou páginas inteiras — funcionando também como camada temporária de resiliência. É especialmente útil quando os dados mudam pouco mas são acessados muito. Vale notar que Redis, CDN e proxy reverso apenas implementam capacidades de cache; não definem o conceito.\n\nOs princípios básicos são comuns a qualquer estratégia. **Consistência**: o maior desafio é manter o cache alinhado à fonte; operações de escrita na origem têm a obrigação de deletar ou atualizar as chaves correspondentes — ex.: um usuário desativado ou que mudou de endereço não pode continuar sendo servido com dado obsoleto. **TTL** (Time to Live): tempo de vida do item, após o qual ele é removido ou invalidado — quase mandatório em larga escala para evitar dados velhos. **Políticas de evicção** quando o cache enche: LRU (remove o menos recentemente usado), LFU (o menos frequentemente usado, mais eficiente porém mais caro de rastrear), FIFO (o primeiro a entrar) e Random. **Hit/Miss/Hit Rate**: cache hit serve direto do cache; cache miss obriga ir à origem (mais lento); o hit rate = hits/(hits+misses) × 100 mede a eficácia — uma taxa baixa sugere otimização ou até remoção da camada. Limpezas totais geram picos de miss até o cache reaquecer.\n\nAs **implementações** vão do simples ao distribuído: cache em memória (hashmap local ao processo, rápido mas com escopo limitado e risco de leak sem invalidação); cache distribuído (Redis, Memcached) acessível por várias réplicas simultaneamente, ideal para escala horizontal; e CDN (Content Delivery Network), que distribui cópias de conteúdo estático geograficamente próximas ao usuário, reduzindo latência, descarregando a origem e absorvendo picos e ataques (DDoS). As **estratégias de uso** definem o fluxo: **Cache-Aside (Lazy Loading)** — a aplicação consulta o cache primeiro; no miss, busca na origem e popula o cache; a mais comum, mas a primeira leitura é mais lenta e a consistência é responsabilidade da aplicação. **Write-Through (escrita dupla)** — escreve simultaneamente no banco e no cache, mantendo-os sincronizados; geralmente combinado com cache-aside, exige recuperação robusta se a escrita na origem falhar após gravar no cache. **Write-Behind (Lazy Writing)** — escreve primeiro no cache e propaga assincronamente para a origem (por intervalo, volume ou fila), otimizando latência de escrita ao custo de risco de perda e da necessidade de um processo paralelo para a persistência.",
+    "relatedTopics": [
+      "databases-indexing",
+      "cqrs",
+      "performance-scalability",
+      "network-protocols",
+      "resilience-patterns"
+    ],
+    "relatedPatterns": [
+      "cqrs",
+      "consistent-hashing"
+    ],
+    "tradeOffs": [
+      {
+        "dimension": "Performance vs consistência",
+        "pro": "Cache reduz latência e carga na origem, servindo dados quentes da memória",
+        "con": "Introduz risco de dados obsoletos; exige invalidação disciplinada nas escritas para não servir estado inválido (ex.: usuário desativado)"
+      },
+      {
+        "dimension": "Cache-aside vs write-through",
+        "pro": "Cache-aside só cacheia o que é lido (eficiente em memória); write-through mantém o cache sempre fresco",
+        "con": "Cache-aside tem primeira leitura lenta e janela de inconsistência; write-through escreve duas vezes e precisa lidar com falha parcial"
+      },
+      {
+        "dimension": "Write-behind (latência de escrita)",
+        "pro": "Responde a escrita imediatamente, propagando à origem depois — ótima latência",
+        "con": "Janela de perda de dados se o cache cair antes de persistir; exige processo/fila adicional"
+      }
+    ],
+    "interviewAngle": "Recorrente em qualquer dimensionamento de leitura. Espera-se que você proponha cache para read-intensive, escolha a estratégia (cache-aside é o default) e — ponto-chave — explique a invalidação: como o cache é atualizado quando o dado muda na origem. Saber calcular hit rate, escolher a política de evicção (LRU costuma ser o default) e posicionar CDN para estáticos demonstra domínio. Não esqueça: TTL e invalidação são onde os bugs moram.",
+    "example": "O msc-transactions-api usa Redis 7.2.4 como cache distribuído sobre o PostgreSQL para servir leituras de saldo/limite com baixa latência — um padrão cache-aside clássico: consulta o Redis, no miss vai ao Postgres e popula o cache. Como o saldo é sensível, as escritas de débito/crédito precisam invalidar/atualizar a chave para não servir saldo obsoleto. Para read-intensive em geral, combina-se primário consistente + réplicas de leitura + cache + CQRS.",
+    "diagrams": [],
+    "sourceRefs": [
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.128",
+        "note": "Definição de cache"
+      },
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.130",
+        "note": "Consistência, TTL, evicção (LRU/LFU/FIFO/RR), hit/miss/hit rate"
+      },
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.136",
+        "note": "Cache distribuído (Redis/Memcached) e CDN"
+      },
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.140",
+        "note": "Cache-aside, write-through, write-behind"
+      },
+      {
+        "kind": "repo",
+        "source": "msc-transactions-api",
+        "locator": "Redis como cache sobre PostgreSQL (saldo/limite)"
+      }
+    ]
+  },
+  {
+    "id": "microservices-monoliths",
+    "title": "Microsserviços, Monolitos e Domínios",
+    "category": "Escalabilidade",
+    "summary": "Monolito = unidade única indivisível (simples, consistência fácil, mas escala e tolerância a falhas limitadas); microsserviços = serviços pequenos independentes que se comunicam por rede (escala e blast radius isolados, mas complexidade distribuída). DDD define limites de contexto e a Lei de Conway explica como a estrutura organizacional molda a arquitetura.",
+    "detailedExplanation": "Um **monolito** é uma aplicação onde todos os componentes são acessados por chamada local, na mesma base de código, no mesmo binário e geralmente na mesma base de dados — como um robô de controle remoto: se uma parte quebra, tudo para. Suas vantagens são simplicidade no desenvolvimento, teste e deploy unificados, e facilidade de manter consistência de dados (tudo num banco). É — ou deveria ser — o estágio inicial de qualquer produto, exceto quando alta demanda é requisito desde o início; Facebook, Twitter, Uber e Netflix começaram monolíticos, e ferramentas como o Istio voltaram de microsserviços para monolito por simplicidade operacional. As desvantagens aparecem com o crescimento: dificuldade de escalar horizontalmente, escala vertical cada vez mais cara, manutenção que se deteriora e tolerância a falhas fraca (uma falha numa parte derruba a unidade inteira).\n\n**Microsserviços** dividem a aplicação em serviços menores e independentes que se comunicam indiretamente por protocolo — como blocos de LEGO, substituíveis sem afetar os demais. Cada serviço foca numa função de negócio e é desenvolvido, implantado e escalado de forma independente. Surgem em resposta a problemas de escala e manutenção, processamento assíncrono e necessidade de reduzir acoplamento e pontos únicos de falha (ex.: separar uma função leve de cadastro de uma função pesada de geração de relatório que competiam por CPU/IO no mesmo host). Vantagens: descentralização (cada serviço com sua linguagem, tecnologia e banco — ACID onde precisa de transação, Elasticsearch onde precisa de busca), escala horizontal independente e blast radius isolado (a falha de um componente não derruba os outros, desde que haja padrões de resiliência). Desvantagens: complexidade de deploy, monitoramento e gestão de falhas; testes de integração/e2e mais difíceis; o maior desafio — consistência e integridade de dados em ambiente distribuído (transações distribuídas longas, sincronização, compensações retroativas); observabilidade mais complexa (tracing, agregação de logs/métricas); e comunicação por rede, exposta a latência e falhas, exigindo circuit breakers, retries, fallbacks e dead letter queues.\n\nDomínios e design amarram tudo. **DDD (Domain-Driven Design)** prioriza o domínio de negócio e a lógica de domínio, com um modelo rico (evitando entidades anêmicas), linguagem ubíqua compartilhada entre devs e especialistas, e limites de contexto bem definidos. DDD não é exclusivo de microsserviços — pode criar um monolito modular — mas é o que melhor identifica os limites de serviço (bounded contexts), mantendo cada microsserviço pequeno, focado e independente, e evitando duplicação de soluções entre equipes. A **Lei de Conway** (Melvin Conway, 1967) afirma que a arquitetura do software reflete a estrutura de comunicação da organização: empresas com muitos times pequenos e autônomos tendem a produzir muitos componentes independentes (microsserviços), enquanto estruturas centralizadas e hierárquicas tendem a monolitos. Entender Conway ajuda a desenhar (e às vezes reorganizar os times — Inverse Conway Maneuver) para que a arquitetura desejada emerja naturalmente.",
+    "relatedTopics": [
+      "api-gateway",
+      "bff",
+      "service-mesh",
+      "saga",
+      "resilience-patterns",
+      "sync-communication",
+      "messaging-streaming"
+    ],
+    "relatedPatterns": [
+      "database-per-service",
+      "api-composition",
+      "saga",
+      "circuit-breaker",
+      "api-gateway"
+    ],
+    "tradeOffs": [
+      {
+        "dimension": "Simplicidade vs escalabilidade",
+        "pro": "Monolito é simples de desenvolver, testar, implantar e manter consistência de dados",
+        "con": "Escala horizontalmente mal, escala vertical fica cara e uma falha pode derrubar a unidade inteira"
+      },
+      {
+        "dimension": "Isolamento vs complexidade distribuída",
+        "pro": "Microsserviços isolam blast radius, permitem escala e tecnologia independentes por serviço",
+        "con": "Complexidade de deploy, observabilidade, testes e — o maior desafio — consistência de dados distribuída (transações longas, compensações)"
+      },
+      {
+        "dimension": "Consistência de dados",
+        "pro": "Monolito centraliza tudo num banco, consistência forte trivial",
+        "con": "Microsserviços exigem saga, eventual consistency e idempotência para coordenar dados entre serviços"
+      }
+    ],
+    "interviewAngle": "Pergunta de abertura clássica ('monolito ou microsserviços?'). A resposta madura é 'depende' e começa pelo monolito modular, migrando para microsserviços só quando escala, número de times ou heterogeneidade de carga justificam. Mostre que você conhece o custo escondido (consistência distribuída, observabilidade), cite DDD/bounded context para definir fronteiras e Conway para alinhar times. Evite a armadilha de tratar microsserviços como default 'moderno'.",
+    "example": "O conjunto de repos de referência ilustra microsserviços bem fronteirizados: msc-transactions-api (domínio transacional ACID, com Postgres+Redis) e event-source-distributed-ledger (domínio de ledger com Event Sourcing+CQRS, cada read model em seu banco — database-per-service). A consistência entre serviços é resolvida via Kafka e eventos pós-commit, não por uma transação distribuída — exatamente o trade-off que microsserviços impõem.",
+    "diagrams": [
+      "architecture-overview"
+    ],
+    "sourceRefs": [
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.147",
+        "note": "Arquitetura monolítica e vantagens"
+      },
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.151",
+        "note": "Desvantagens do monolito"
+      },
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.152",
+        "note": "Arquitetura de microsserviços"
+      },
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.157",
+        "note": "Domínios, DDD e bounded contexts"
+      },
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.160",
+        "note": "Lei de Conway"
+      },
+      {
+        "kind": "reference",
+        "source": "microservices.io",
+        "locator": "patterns/microservices.html"
+      }
+    ]
+  },
+  {
+    "id": "load-balancing",
+    "title": "Load Balancers e Proxies Reversos",
+    "category": "Escalabilidade",
+    "summary": "Load balancers distribuem requisições entre N réplicas da mesma aplicação; proxies reversos intermediam (often 1:1) com SSL offloading, cache e roteamento. Algoritmos (Round Robin, Least Request/Connection, LOR, IP Hash, Maglev, Random) e camadas OSI (Layer 4 = veloz e cego ao payload; Layer 7 = inteligente e granular) definem o comportamento.",
+    "detailedExplanation": "Um **Load Balancer** distribui requisições entre vários hosts da mesma aplicação, evitando que um node sature enquanto outros ficam ociosos; é o que dá escala horizontal e tolerância a falha. Um **Proxy Reverso** é uma camada intermediária que pode atuar numa relação 1:1 (um único backend atrás dele) cuidando de pool de conexões, limites de upload, segurança, roteamento por URL/header/IP, SSL/TLS offloading e cache — embora também possa ter múltiplos hosts no pool. Ambos são patterns de rede viabilizados pelas mesmas tecnologias (Envoy, Nginx, HAProxy, Traefik), e soluções modernas frequentemente desempenham os dois papéis.\n\nOs **algoritmos** definem como a carga é distribuída. **Round Robin** distribui cíclica e uniformemente (origem no escalonamento de CPU, previne starvation), simples e justo, mas não considera que requisições têm custos diferentes nem a capacidade dos hosts. **Least Request** envia para o host que processou menos requisições (contador por host) — bom para requisições curtas e uniformes, mas ignora a saturação. **Least Connection** escolhe o host com menos conexões ativas (considera keep-alive, WebSocket, gRPC persistente) — mais sofisticado, mas não avalia o peso de cada conexão. **Least Outstanding Requests (LOR)** considera requisições pendentes (iniciadas mas não concluídas), atacando diretamente a saturação — o mais eficaz para tempos de resposta variáveis, ao custo de monitoramento contínuo caro. **IP Hash** gera um hash consistente do IP do cliente para mandá-lo sempre ao mesmo host (persistência de sessão/sticky), mas sofre com NAT/proxies e distribuição desigual. **Maglev** (Google) usa hash consistente para mapear cliente→servidor de forma determinística e equilibrada, com mínima flutuação no rebalanceamento — ideal para datacenters, multi-tenant e cache, mas difícil sob mudança rápida de pool. **Random** é o mais simples (sem estado, baixa latência de decisão), mas pode desbalancear com poucos requests.\n\nO cruzamento com o **modelo OSI** é decisivo. **Layer 4 (Transporte)**: opera sobre TCP/UDP, vê só IP e porta, não interpreta o payload — extremamente rápido e eficiente, ideal quando throughput e latência são prioridade, mas sem roteamento granular. **Layer 7 (Aplicação)**: entende HTTP, gRPC e WebSocket, podendo rotear por URL, header, body ou querystring, fazer SSL/TLS offloading, cache de respostas e compressão — inteligência e flexibilidade ao custo de processar o conteúdo. Em microsserviços, um Layer 7 encaminha paths/hosts diferentes para serviços diferentes. Resumo: Layer 4 = velocidade e eficiência de tráfego; Layer 7 = inteligência de roteamento. As tecnologias de mercado (Envoy — coração do Cloud Native; Nginx; HAProxy; Traefik com descoberta dinâmica em Docker/Kubernetes; Ingress Controllers; Cloud Load Balancers da AWS/GCP/Azure) implementam esses papéis com health check, circuit breaking e resiliência.",
+    "relatedTopics": [
+      "api-gateway",
+      "bff",
+      "service-mesh",
+      "network-protocols",
+      "sharding-partitioning",
+      "resilience-patterns",
+      "cell-based"
+    ],
+    "relatedPatterns": [
+      "consistent-hashing",
+      "circuit-breaker",
+      "health-check-api",
+      "api-gateway"
+    ],
+    "tradeOffs": [
+      {
+        "dimension": "Layer 4 vs Layer 7",
+        "pro": "Layer 4 é rapidíssimo (só IP/porta); Layer 7 roteia por conteúdo e faz SSL offload/cache",
+        "con": "Layer 4 não tem roteamento granular; Layer 7 paga o custo de interpretar o payload"
+      },
+      {
+        "dimension": "Round Robin vs LOR",
+        "pro": "Round Robin é simples e justo; LOR equaliza pela saturação real (requisições pendentes)",
+        "con": "Round Robin ignora custo da requisição e capacidade do host; LOR exige monitoramento contínuo caro e complexo"
+      },
+      {
+        "dimension": "IP Hash / Maglev (persistência)",
+        "pro": "Garantem que o mesmo cliente vá ao mesmo host (sticky session, cache, multi-tenant)",
+        "con": "Desbalanceiam sob NAT/proxy e sofrem com mudança rápida de pool (rehashing) em ambientes elásticos"
+      }
+    ],
+    "interviewAngle": "Onipresente em qualquer desenho de sistema escalável. Saiba posicionar LB Layer 4 vs Layer 7 (e por que TLS offload e roteamento por path vivem no Layer 7), escolher o algoritmo pelo perfil de carga (Round Robin para requisições uniformes; LOR/Least Connection para duração variável; IP Hash/Maglev para sticky/cache) e citar health check e circuit breaking. Conectar consistent hashing (Maglev/IP Hash) ao sharding é um ponto forte.",
+    "example": "O msc-shard-router é essencialmente um roteador Layer 7 com hashing consistente: lê o header id_client, calcula o hash (SHA-512 por padrão, com réplicas virtuais para evitar hotspots e busca binária O(log n)) e envia determinísticamente para o shard certo, mantendo-se estável quando shards entram/saem — a mesma família de ideias do Maglev/IP Hash aplicada a roteamento por sharding, com circuit breaker (threshold 5, open 30s) embutido.",
+    "diagrams": [
+      "shard-router-flow",
+      "api-gateway-vs-bff"
+    ],
+    "sourceRefs": [
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.162",
+        "note": "Load balancers e proxies reversos"
+      },
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.167",
+        "note": "Round Robin, Least Request/Connection, LOR"
+      },
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.173",
+        "note": "IP Hash, Maglev, Random"
+      },
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.176",
+        "note": "Load balancing e camadas OSI (Layer 4 vs Layer 7)"
+      },
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.179",
+        "note": "Envoy, Nginx, HAProxy, Traefik, Ingress, Cloud LB"
+      },
+      {
+        "kind": "repo",
+        "source": "msc-shard-router",
+        "locator": "pkg/hashring/ — hashing consistente, réplicas virtuais, busca binária"
+      }
+    ]
+  },
+  {
+    "id": "api-gateway",
+    "title": "API Gateways",
+    "category": "Comunicação",
+    "summary": "Camada de abstração entre clientes e microsserviços que oferece ponto de entrada único e roteamento, centralizando funções comuns (autenticação/autorização, rate limiting, throttling, cache, versionamento). Resolve governança de exposição de APIs REST, complementando — não substituindo — load balancers.",
+    "detailedExplanation": "Um **API Gateway** é uma camada de abstração entre clientes e os serviços de uma arquitetura, oferecendo interface única e roteamento. Ele recebe todas as chamadas de API, encaminha para o serviço interno apropriado por regras predefinidas (basepaths, métodos) e devolve a resposta — dando ao cliente a experiência de consumir muitos serviços como se fossem um só. Por padrão é intermediário primariamente de APIs REST. O problema que resolve: em microsserviços, expor dezenas/centenas de endpoints públicos diretamente obrigaria cada cliente (SPA, mobile, integração de terceiros) a conhecer todas as URLs e documentações, e cada time a reimplementar segurança de forma consistente; trocar um serviço por outro exigiria mudança nos clientes. O Gateway encapsula essa complexidade atrás de um único ponto de entrada, permitindo inclusive substituir um backend 'em voo' desde que o contrato seja respeitado.\n\nSeus **componentes** principais: **Roteamento de requisições** (a função central — encaminha ao microsserviço certo com base em informações do HTTP, sem o cliente conhecer o backend). **Autenticação e autorização** centralizadas (autenticação = quem você é; autorização = o que você pode fazer), eliminando a duplicação desses controles em cada serviço, geralmente integradas a um servidor de identidade externo. **Rate Limiting e Throttling** para proteger os backends: Rate Limiting é preventivo (restringe nº de requisições por cliente/período — ex.: segurar acima de 100 TPS para um serviço que satura nesse limite; também monetizável por plano); Throttling é reativo (reduz/bloqueia a taxa quando o limite global do próprio gateway é ultrapassado, como um sistema de defesa térmica que reduz a vazão para proteger a integridade). Os dois algoritmos clássicos: **Token Bucket** — um balde com capacidade máxima reabastecido a taxa fixa; permite bursts curtos (acumula tokens até o teto) e é implementado em Redis para contadores centralizados (eventualmente consistentes) entre réplicas, com consistência fraca que pode 'vazar' alguns requests a mais. **Leaky Bucket** — saída constante e rígida (bucket = taxa de reposição), não permite burst, suaviza totalmente o tráfego, ideal para cadência controlada. Também faz **modificação de mensagens**, **cache** e **gerenciamento/versionamento de APIs** (coexistência de versões, reescrita de path do backend, e até release gradual estilo canary entre duas versões do mesmo backend que respeitem o contrato).\n\nComparado a Load Balancers e Proxies Reversos: todos intermedeiam cliente↔backend, mas com escopos distintos. Load balancers distribuem requisições entre N réplicas da mesma aplicação em várias camadas (Layer 4/7), e a aplicação pode ser qualquer coisa (web, RPC, banco). O API Gateway foca em criar uma abstração unificada e governança específica de endpoints HTTP/REST — expõe só os endpoints selecionados e gerencia seu consumo. Não substitui o load balancer; ambos atuam juntos, com o Gateway tendo load balancers como backend (que cuidam da distribuição, health check e resiliência entre os hosts).",
+    "relatedTopics": [
+      "bff",
+      "service-mesh",
+      "load-balancing",
+      "microservices-monoliths",
+      "sync-communication",
+      "resilience-patterns"
+    ],
+    "relatedPatterns": [
+      "api-gateway",
+      "backend-for-frontend",
+      "api-composition",
+      "circuit-breaker"
+    ],
+    "tradeOffs": [
+      {
+        "dimension": "Centralização vs ponto único de falha",
+        "pro": "Ponto de entrada único simplifica os clientes e centraliza auth, rate limit e governança",
+        "con": "O gateway vira um componente crítico: precisa escalar e ser resiliente para não virar SPOF nem gargalo de toda a malha"
+      },
+      {
+        "dimension": "Token Bucket vs Leaky Bucket",
+        "pro": "Token Bucket absorve bursts curtos (flexível); Leaky Bucket dá cadência rígida e previsível",
+        "con": "Token Bucket tem consistência fraca e pode deixar passar requests a mais; Leaky Bucket não permite nenhum burst, podendo rejeitar picos legítimos"
+      },
+      {
+        "dimension": "Rate limiting preventivo vs throttling reativo",
+        "pro": "Rate limit protege o backend antes de saturar; throttling estabiliza o gateway global sob sobrecarga",
+        "con": "Limites mal calibrados barram tráfego legítimo; contadores distribuídos (Redis) são eventualmente consistentes"
+      }
+    ],
+    "interviewAngle": "Aparece sempre que há múltiplos serviços expostos. Saiba diferenciar Gateway de Load Balancer e de BFF (Gateway = governança de REST e ponto único; BFF = composição por canal de cliente), posicionar auth/rate limit/throttling no gateway, e explicar Token Bucket vs Leaky Bucket com o detalhe de que o contador costuma viver em Redis e ser eventualmente consistente. Cuidado em apontar o gateway como possível SPOF/gargalo e como mitigá-lo (escala, health check, LB atrás).",
+    "example": "O event-source-distributed-ledger usa Kong como API Gateway e Envoy para rate limit na borda — exatamente a separação descrita: o gateway expõe e governa os endpoints REST das APIs de saldo e extrato, enquanto a limitação de taxa protege os serviços downstream de picos. O Token Bucket centralizado em Redis (in-memory, eventualmente consistente) é o padrão típico para sustentar esses limites entre múltiplas réplicas do gateway.",
+    "diagrams": [
+      "api-gateway-vs-bff",
+      "architecture-overview"
+    ],
+    "sourceRefs": [
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.185",
+        "note": "Definição de API Gateway"
+      },
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.188",
+        "note": "API Gateways em microsserviços"
+      },
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.191",
+        "note": "Gateways vs Load Balancers"
+      },
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.194",
+        "note": "Rate limiting e throttling"
+      },
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.196",
+        "note": "Token Bucket e Leaky Bucket"
+      },
+      {
+        "kind": "reference",
+        "source": "microservices.io",
+        "locator": "patterns/apigateway.html"
+      },
+      {
+        "kind": "repo",
+        "source": "event-source-distributed-ledger",
+        "locator": "kong/ (gateway), envoy/ (rate limit)"
+      }
+    ]
+  },
+  {
+    "id": "bff",
+    "title": "Backend for Frontend (BFF)",
+    "category": "Comunicação",
+    "summary": "Um backend especializado e dedicado a cada tipo de cliente (web, mobile, IoT) que orquestra e adapta as chamadas aos microsserviços de downstream, em vez de um único backend genérico para todos os canais.",
+    "detailedExplanation": "O BFF parte de uma observação simples: as requisições de um app **mobile** têm requisitos de negócio, segurança, formato de payload e escalabilidade diferentes dos de um cliente **web** ou de uma **API pública**. Em vez de empilhar condicionais (`if mobile ... else web ...`) num backend único, criamos uma aplicação intermediária por canal, que conhece a jornada específica daquele público-alvo. É importante não confundir o BFF com infraestrutura: API Gateway e load balancer são componentes de infra que desacoplam e unificam; o BFF é uma **aplicação completa**, com sua própria capacidade, escalabilidade e segurança, e pode inclusive rodar *atrás* de um gateway.\n\nA responsabilidade mais característica do BFF é o **API Composition**: o frontend faz **uma** chamada ao BFF, e este internamente dispara as N requisições aos serviços de downstream, consolida e formata o payload, e devolve exatamente o que aquele canal espera. Isso reduz latência de rede (menos round-trips do cliente), simplifica o código do frontend e dá um ponto natural para transformações — filtrar campos sensíveis, renomear/reformatar campos, ordenar listas, enriquecer dados e acionar fallbacks. Cada canal pode ter sua própria estratégia: o canal web pode fazer SSR e gerir sessão num cache central com JWT; o mobile exige respostas enxutas, compressão agressiva e sync offline; um canal IoT lida com conexões intermitentes via MQTT/WebSockets.\n\nUm ponto de System Design importante é o **blast radius**: mesmo segregando BFFs por canal, todos costumam compartilhar os mesmos serviços críticos de downstream. Por isso cada BFF deve embutir os patterns de resiliência (circuit breaker, timeouts, retries, fallbacks) e idealmente ser uma unidade de deployment independente, com bulkheads lógicos, para que uma falha não derrube todos os canais. O BFF também **desacopla métricas por canal**: dá pra medir error rate, throughput e tempo de resposta do mobile separados do web, mesmo com downstream compartilhado, e definir Service Levels distintos por experiência de uso. Em projetos com microfrontends, é comum um BFF coeso por microfrontend, reforçando equipes end-to-end (Lei de Conway) e permitindo deploy/rollback de UI+backend como uma unidade.",
+    "relatedTopics": [
+      "api-gateway",
+      "microservices-monoliths",
+      "resilience-patterns",
+      "bulkhead",
+      "observability",
+      "sync-communication"
+    ],
+    "relatedPatterns": [
+      "backend-for-frontend",
+      "api-composition",
+      "api-gateway",
+      "circuit-breaker",
+      "bulkhead"
+    ],
+    "tradeOffs": [
+      {
+        "dimension": "Experiência do cliente",
+        "pro": "Payload sob medida por canal, menos round-trips e código de frontend mais simples.",
+        "con": "Mais artefatos para construir, versionar e operar — um BFF por canal multiplica a superfície de deploy."
+      },
+      {
+        "dimension": "Isolamento de canais",
+        "pro": "Falha/lentidão de um canal e suas métricas ficam isoladas; SLAs independentes por público.",
+        "con": "Como o downstream é compartilhado, um serviço crítico ainda pode impactar todos os BFFs se não houver bulkhead/resiliência."
+      },
+      {
+        "dimension": "Acoplamento",
+        "pro": "Tira a complexidade do ecossistema de microsserviços de dentro do cliente.",
+        "con": "Risco de duplicação de lógica entre BFFs e de o BFF virar um mini-monolito de orquestração."
+      }
+    ],
+    "interviewAngle": "Sai como 'como você serviria web e mobile com necessidades de payload diferentes sem inflar o cliente?'. A resposta forte distingue BFF (aplicação por canal, com composição e adaptação de contrato) de API Gateway (infra de roteamento/cross-cutting), e já antecipa o blast radius: BFFs segregados ainda compartilham downstream, então resiliência e bulkhead são obrigatórios. Bônus citar desacoplamento de métricas por canal e BFF-por-microfrontend para times end-to-end.",
+    "example": "Um BFF mobile do Knowledge Base recebe uma única chamada da tela de tópico e compõe internamente os dados de tópicos, patterns e diagramas (API Composition), devolvendo só os campos que a tela usa — enquanto o BFF web entrega o payload completo para SSR. É o mesmo papel que o Java BFF deste Lab desempenha ao consolidar topics/patterns/flows para o frontend.",
+    "diagrams": [
+      "bff-knowledge-base",
+      "api-gateway-vs-bff"
+    ],
+    "sourceRefs": [
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.201-209"
+      },
+      {
+        "kind": "reference",
+        "source": "microservices.io",
+        "locator": "patterns/apigateway/backend-for-front-end.html"
+      }
+    ]
+  },
+  {
+    "id": "service-mesh",
+    "title": "Service Mesh",
+    "category": "Comunicação",
+    "summary": "Pattern de networking que trata a rede como software: move segurança, observabilidade e resiliência (mTLS, retries, circuit breaking, métricas) para uma camada de comunicação dedicada, transparente para a aplicação.",
+    "detailedExplanation": "Antes de qualquer coisa, Service Mesh é um **pattern de networking**. Ele existe para lidar com a alta complexidade de comunicação entre muitos microsserviços, oferecendo — **diretamente na camada de rede** — funcionalidades de métricas, observabilidade, segurança, controle e resiliência, de forma desacoplada da aplicação. A ideia central é interceptar as conexões (TCP, HTTP, gRPC) que naturalmente acontecem entre serviços e adicionar comportamento, de modo que os próprios serviços nem saibam que estão dentro de uma malha. Em vez de cada serviço reimplementar mTLS, balanceamento, retries e service discovery, essas responsabilidades são centralizadas e aplicadas de forma declarativa e configurável — tratar a rede como software.\n\nA arquitetura se divide em dois planos. O **Control Plane** define e armazena as regras da malha (roteamento por host/header/path, autorizações entre serviços, chaveamento de tráfego entre versões) numa camada persistente, e as disponibiliza para consulta. O **Data Plane** é quem executa de fato essas regras, idealmente sem reiniciar nem alterar a aplicação. Os agentes do Data Plane normalmente operam por **proxies** que interceptam todo o tráfego de entrada e saída, decidindo para onde rotear, se a chamada está autorizada e coletando métricas. Essa separação permite gerenciar a comunicação de forma central e propagar mudanças para toda a malha sem tocar em cada serviço.\n\nExistem modelos de implementação com trade-offs distintos. O **client-server** (via SDK/biblioteca na aplicação) é o mais rudimentar e acopla o comportamento ao código. O modelo de **sidecar** é o mais comum: um container proxy junto de cada réplica intercepta o tráfego e aplica balanceamento, retries, mTLS, circuit breaking e telemetria — porém é o mais caro computacionalmente, pois adiciona um componente por réplica. As abordagens **sidecarless/proxyless** capturam eventos no kernel ou na própria camada de rede, compartilhando funções entre serviços; são mais econômicas e performáticas e fortes na camada 4 (transporte), mas têm limitações na camada 7 (aplicação), frequentemente supridas por proxies compartilhados. Entre as funcionalidades 'de dia zero' estão roteamento inteligente (viabilizando canary/blue-green/traffic mirror), balanceamento dinâmico com health checks, observabilidade/tracing transparente, autorização granular entre serviços, **mTLS por padrão** (com o Control Plane gerindo emissão/rotação de certificados) e resiliência na rede, incluindo fault injection para testar as estratégias.",
+    "relatedTopics": [
+      "sync-communication",
+      "load-balancing",
+      "api-gateway",
+      "resilience-patterns",
+      "observability",
+      "deployment-strategies"
+    ],
+    "relatedPatterns": [
+      "circuit-breaker",
+      "distributed-tracing",
+      "application-metrics",
+      "health-check-api"
+    ],
+    "tradeOffs": [
+      {
+        "dimension": "Abstração vs custo (sidecar)",
+        "pro": "Resiliência, mTLS e telemetria transparentes, sem tocar no código da aplicação.",
+        "con": "Um proxy por réplica consome CPU/memória e adiciona latência; multiplica recursos no cluster."
+      },
+      {
+        "dimension": "Sidecarless / proxyless",
+        "pro": "Mais econômico e performático, forte na camada 4 operando no kernel.",
+        "con": "Limitações nas features de camada 7; muitas vezes exige proxies compartilhados para retries/circuit breaking."
+      },
+      {
+        "dimension": "Centralização de políticas",
+        "pro": "Regras geridas no Control Plane e propagadas a toda a malha sem redeploy dos serviços.",
+        "con": "Mais um plano crítico para operar; má configuração no Control Plane afeta toda a comunicação."
+      }
+    ],
+    "interviewAngle": "Costuma cair como 'onde você coloca mTLS, retries e tracing num ambiente com 200 microsserviços?'. Resposta forte: na malha (Control Plane define, Data Plane executa via sidecar/eBPF), não em cada serviço. Saber explicar o custo do sidecar (1 proxy por réplica) vs proxyless e citar que mesh ≠ API Gateway (mesh é tráfego leste-oeste, interno; gateway é norte-sul, na borda) sinaliza senioridade.",
+    "example": "Num cluster Kubernetes, cada pod do msc-transactions-api ganharia um sidecar proxy que aplica mTLS, circuit breaking e coleta latência/error rate por chamada de forma transparente — funcionalidades que o repo hoje implementa manualmente em código (ex.: circuit breaker com CB_FAILURE_THRESHOLD no msc-shard-router) poderiam ser empurradas para o Data Plane da malha.",
+    "diagrams": [
+      "architecture-overview"
+    ],
+    "sourceRefs": [
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.210-224"
+      },
+      {
+        "kind": "repo",
+        "source": "msc-shard-router",
+        "locator": "pkg/",
+        "note": "Circuit breaker (CB_FAILURE_THRESHOLD/CB_OPEN_TIMEOUT_SEC) implementado em código — exatamente o tipo de responsabilidade que um mesh abstrai."
+      }
+    ]
+  },
+  {
+    "id": "concurrency-parallelism",
+    "title": "Concorrência, Paralelismo e Multithreading",
+    "category": "Fundamentos",
+    "summary": "Concorrência é gerenciar muitas tarefas intercaladas (uma ativa por vez no mesmo core); paralelismo é executá-las literalmente ao mesmo tempo em múltiplos cores. Ambos exigem sincronização (mutex, semáforo) para evitar race conditions, deadlock e starvation.",
+    "detailedExplanation": "Um **processo** é uma instância de um programa em execução, com memória isolada; uma **thread** é a menor unidade de processamento gerenciada pelo SO, e threads de um mesmo processo compartilham memória e recursos. **Multithreading** é criar várias threads dentro de um processo — em CPU single-core isso gera **concorrência** (a CPU alterna rapidamente entre threads via context switching, criando a ilusão de simultaneidade); em multi-core, gera **paralelismo real** (threads rodando ao mesmo tempo em cores distintos). A distinção canônica: concorrência é **lidar** com muitas tarefas ao mesmo tempo (uma ativa por vez por core, intercaladas); paralelismo é **fazer** várias coisas literalmente ao mesmo tempo. Todo paralelismo é concorrente, mas nem toda concorrência é paralela. Uma sutileza importante: em ambos os casos você não controla a ordem de processamento — só sabe a ordem real depois que tudo termina.\n\nO workbook separa **paralelismo interno** (intrínseco — o que você implementa em código dentro do seu container/servidor, dividindo tarefas em memória) do **paralelismo externo** (execução simultânea em hardwares/máquinas/containers diferentes: Spark/Hadoop, consumo de mensagens de RabbitMQ/SQS/Kafka, load balancers distribuindo requisições). Essa ponte é o que liga concorrência a System Design: escalar horizontalmente é, em essência, aplicar paralelismo externo. Compartilhar recurso entre unidades de execução traz problemas clássicos: **deadlock** (duas threads esperam para sempre por recursos que a outra detém — ciclo de dependência), **starvation** (uma thread nunca consegue acesso por alocação desigual de prioridade), e **race condition** (resultado final depende da ordem não-determinística com que threads modificam um recurso compartilhado).\n\nAs ferramentas de sincronização: **Mutex** (exclusão mútua — só uma thread por vez no recurso, com lock/unlock; evita race conditions mas pode causar deadlock se locks forem adquiridos em ordem inconsistente). **Spinlock** (em vez de dormir, a thread fica 'girando' num loop checando o lock — eficiente para esperas curtas, desperdiça CPU em esperas longas). **Semáforo** (contador de recursos com Wait/Signal — o binário equivale a um mutex; o contador permite N acessos simultâneos, base de **Worker Pools** que limitam quantas tarefas rodam ao mesmo tempo). Em sistemas distribuídos, a mesma lógica vira **Mutex distribuído** (lock externo em Redis/Zookeeper/DynamoDB para garantir idempotência e exclusividade no consumo de mensagens entre réplicas) e a race condition vira **interprocessual**: eventos que chegam fora de ordem por canais assíncronos, resolvidos por estratégias como **Last-Write-Wins** com timestamps atômicos.",
+    "relatedTopics": [
+      "messaging-streaming",
+      "performance-scalability",
+      "data-replication",
+      "resilience-patterns",
+      "saga"
+    ],
+    "relatedPatterns": [
+      "idempotent-consumer",
+      "bulkhead"
+    ],
+    "tradeOffs": [
+      {
+        "dimension": "Concorrência vs Paralelismo",
+        "pro": "Concorrência aproveita bem I/O-bound (uma thread espera, outra avança) mesmo em 1 core.",
+        "con": "Paralelismo real exige multi-core e ajuda CPU-bound, mas traz custo de coordenação e sincronização."
+      },
+      {
+        "dimension": "Mutex vs Spinlock",
+        "pro": "Mutex põe a thread para dormir, liberando CPU em esperas longas.",
+        "con": "Spinlock evita o overhead de dormir/acordar (bom para esperas curtíssimas), mas queima CPU 'girando' se a espera for longa."
+      },
+      {
+        "dimension": "Semáforo / Worker Pool",
+        "pro": "Limita o número de tarefas simultâneas, protegendo recursos a jusante de sobrecarga.",
+        "con": "Subdimensionar o pool vira gargalo; superdimensionar reintroduz contenção e race conditions."
+      }
+    ],
+    "interviewAngle": "Aparece como 'concorrência vs paralelismo, qual a diferença?' (frase-chave: lidar com muitas tarefas vs fazer várias ao mesmo tempo) e evolui para 'como você garante que dois consumidores não processem a mesma mensagem?' — aí entra mutex distribuído (lock em Redis/Zookeeper) e idempotência. Citar deadlock/starvation/race condition e Last-Write-Wins para eventos fora de ordem mostra que você conecta o fundamento de SO ao mundo distribuído.",
+    "example": "No consumo de eventos de saldo do event-source-distributed-ledger, várias réplicas competem por partições do Kafka; um lock distribuído (ou a unicidade movimentacao_id + LWT por versão no ScyllaDB) faz o papel do 'mutex distribuído' descrito no workbook, garantindo que escritas concorrentes/fora de ordem não corrompam o estado — exatamente o problema de race condition interprocessual.",
+    "diagrams": [
+      "event-sourced-ledger-flow"
+    ],
+    "sourceRefs": [
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.225-262"
+      },
+      {
+        "kind": "repo",
+        "source": "event-source-distributed-ledger",
+        "locator": "balance/consumer.go",
+        "note": "LWT (UPDATE ... IF version < ?) no ScyllaDB resolve race condition interprocessual / ordem fora de sequência."
+      }
+    ]
+  },
+  {
+    "id": "sync-communication",
+    "title": "Comunicação Síncrona (REST, gRPC, GraphQL, WebSockets, Webhooks)",
+    "category": "Comunicação",
+    "summary": "Padrões em que o cliente bloqueia esperando a resposta do servidor antes de continuar. Engloba REST (HTTP/recursos), gRPC (HTTP/2 + Protobuf, contrato forte), GraphQL (query sob demanda), WebSockets (full-duplex) e Webhooks (notificação push reversa).",
+    "detailedExplanation": "Comunicação síncrona é o padrão em que o cliente **espera a resposta** do servidor antes de prosseguir — natureza **bloqueante**, com espera ativa entre as partes. É simples, intuitivo e ótimo onde a **consistência** importa (operações em sequência determinada). O preço: limita escalabilidade (o bloqueio reduz processamento paralelo) e propaga falhas em cadeia — a indisponibilidade de uma dependência num encadeamento síncrono pode degradar a disponibilidade de todo o fluxo. Por isso, mesmo sendo simples de construir, chamadas síncronas exigem cuidado com **timeouts, retries e resiliência** entre cliente e servidor.\n\n**REST** é o estilo arquitetural dominante para comunicação síncrona: recursos identificados por URIs, manipulados via verbos HTTP (GET/POST/PUT/PATCH/DELETE). Seus princípios centrais são interface uniforme, **comunicação stateless** (cada request carrega tudo que precisa; o servidor não guarda estado de sessão — o que habilita escala horizontal e retry em qualquer nó do pool), arquitetura em camadas e cacheabilidade explícita (Cache-Control, ETag). A **idempotência** dos métodos é um ponto crítico de design: GET/PUT/DELETE são idempotentes por natureza; POST não é (precisa de chave de idempotência para retry seguro); PATCH depende. **gRPC** é o RPC moderno do Google: HTTP/2 (múltiplas chamadas em paralelo numa conexão, streaming bidirecional) + **Protobuf** como contrato forte e serialização binária eficiente. Mais performático que REST, mas mais complexo: distribuir e versionar os `.proto` entre cliente e servidor é trabalhoso, e mudar o contrato exige atualizar todos os clientes.\n\n**GraphQL** é uma query language + runtime onde o cliente define exatamente os dados que quer, resolvendo **over-fetching** (trafegar campos não usados) e **under-fetching** (ter que consultar vários endpoints). O schema (SDL) é o contrato; resolvers buscam dados de fontes heterogêneas (SQL, NoSQL, REST, RPC). Custo: a flexibilidade pode virar falta de padrão e dificuldade de cache/observabilidade. **WebSockets** estabelecem conexão **full-duplex** persistente sobre um único socket TCP (após um upgrade HTTP), ideal para tempo real (chats, dashboards, cotações). **Webhooks** invertem o polling: em vez de o cliente ficar perguntando 'já ficou pronto?' periodicamente (custoso e com atraso), o cliente registra uma URL e o servidor faz **push** quando o evento ocorre (ex.: confirmação de pagamento Pix). Uma estratégia de convergência comum: expor o domínio em REST na borda (simples de consumir) e usar gRPC internamente entre microsserviços (leve e rápido).",
+    "relatedTopics": [
+      "network-protocols",
+      "messaging-streaming",
+      "api-gateway",
+      "bff",
+      "caching",
+      "resilience-patterns"
+    ],
+    "relatedPatterns": [
+      "api-gateway",
+      "circuit-breaker",
+      "idempotent-consumer",
+      "api-composition"
+    ],
+    "tradeOffs": [
+      {
+        "dimension": "REST vs gRPC",
+        "pro": "REST é simples, legível, fácil de cachear e expor na borda.",
+        "con": "gRPC é mais rápido (HTTP/2 + binário) mas exige distribuir/versionar Protobuf e acopla cliente-servidor ao contrato."
+      },
+      {
+        "dimension": "GraphQL",
+        "pro": "Elimina over/under-fetching com uma única query sob demanda.",
+        "con": "Perde padronização, cache HTTP e previsibilidade de carga; consultas mal feitas viram queries caras."
+      },
+      {
+        "dimension": "Síncrono em geral",
+        "pro": "Consistência imediata e modelo mental simples (request/reply).",
+        "con": "Bloqueio propaga latência e indisponibilidade em cadeia; limita paralelismo e escala."
+      },
+      {
+        "dimension": "Polling vs Webhook",
+        "pro": "Webhook entrega o estado no instante do evento, sem requisições desperdiçadas.",
+        "con": "Exige expor endpoint público, validar/segurar a entrada e lidar com reentrega — polling é mais simples porém ineficiente."
+      }
+    ],
+    "interviewAngle": "Pergunta clássica: 'REST ou gRPC para esse serviço?' — responda pela borda (REST/externo) vs interno (gRPC, leve). 'Como tornar um POST seguro para retry?' puxa idempotência (chave de idempotência, já que POST não é idempotente). 'Polling vs webhook?' testa se você entende custo de requisições periódicas. WebSocket aparece em requisitos de tempo real. Saber por que stateless habilita escala horizontal é diferencial.",
+    "example": "O msc-transactions-api expõe débito/crédito via HTTP/REST (Fiber) com suporte a idempotência — exatamente o cenário do workbook em que um POST de transação financeira precisa de chave de idempotência para tolerar retry sem duplicar lançamento. Internamente, entre microsserviços de um mesmo domínio, gRPC seria a escolha leve recomendada pela seção de convergência.",
+    "diagrams": [
+      "transactional-api-flow",
+      "api-gateway-vs-bff"
+    ],
+    "sourceRefs": [
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.263-293"
+      },
+      {
+        "kind": "repo",
+        "source": "msc-transactions-api",
+        "locator": "routes/",
+        "note": "API REST de transações com suporte a idempotência (HTTP + Fiber)."
+      }
+    ]
+  },
+  {
+    "id": "messaging-streaming",
+    "title": "Mensageria, Eventos e Streaming (Arquitetura Assíncrona)",
+    "category": "Comunicação",
+    "summary": "Comunicação assíncrona via intermediários. Mensagens são imperativas e 1:1 (filas, 'faça algo'); eventos são reativos e 1:N (tópicos, 'algo aconteceu'). Cobre FIFO/LIFO, fanout, DLQ, batch, Kafka (streaming) e protocolos message-driven (MQTT, AMQP).",
+    "detailedExplanation": "A comunicação assíncrona troca dados e comandos via componentes intermediários, e se divide em duas formas com semânticas distintas. **Mensagens** são imperativas e geralmente 1:1: têm um destinatário conhecido e intencional, trafegam por **filas (queues)** e dizem 'faça algo' ('cobre essa compra', 'envie esse e-mail'). **Eventos** são reativos e 1:N: são uma notificação genérica de que 'algo aconteceu' (uma mudança de estado de domínio, ex.: 'uma venda aconteceu'), trafegam por **tópicos** e chegam ao mesmo tempo a todos os interessados, que reagem de forma independente. A consequência arquitetural é o **acoplamento**: mensagens acoplam mais (emissor e receptor concordam num contrato e numa intenção); eventos desacoplam — o produtor não sabe quem consome nem como, o que facilita escalar e adicionar novos subsistemas. Conceitualmente, eventos são um subtipo de mensagem (junto com Documentos e Comandos).\n\nVários conceitos atravessam mensageria, eventos e streaming. **FIFO** (first-in-first-out) garante ordem mínima de processamento — útil em finanças, onde a ordem das transações importa; **LIFO** (pilha) serve para lógicas de 'desfazer' em ordem inversa. **Fanout** é distribuir a mesma mensagem 1:N (para replicação ou para vários consumer groups). **Dead Letter Queues (DLQ)** centralizam mensagens que falharam (erro, timeout, retries excedidos), evitando retries infinitos na fila principal e servindo como indicador-chave de saúde do sistema assíncrono. **Processamento em batch** acumula um lote e processa de uma vez (fechamentos contábeis, relatórios) — exige robusto tratamento de erro/recuperação. **Streaming** processa fluxo contínuo de dados em tempo quase real (cliques, detecção de fraude, recomendação), em contraste com o batch de blocos estáticos.\n\n**Kafka** é a plataforma de streaming de referência: **brokers** formam o cluster; **tópicos** são feeds de eventos por assunto, subdivididos em **partições** (a unidade de paralelismo — cada consumidor lê uma ou mais); **replication factor** mantém cópias do dado em brokers distintos para alta disponibilidade (nunca maior que o nº de brokers). **Producers** podem escolher partição via chave (garante ordem/continuidade por cliente, mas arrisca **hot partitions**) e ajustar `acks` (mais ACKs = mais confiabilidade, menos throughput) e batch/linger. **Consumer groups**: cada registro de uma partição vai a um único consumidor por grupo, e o paralelismo de consumo é limitado ao número de partições — ter mais réplicas que partições não aumenta o consumo. Já os protocolos **message-driven** atendem outros cenários: **MQTT** é leve, pub/sub sobre TCP persistente, ideal para IoT/edge (com default subscription = todos recebem cópia, e shared subscription = balanceamento de carga entre subscribers); **AMQP** (RabbitMQ) é mais rico — confirmação de mensagens, roteamento flexível via **exchanges** (direct/topic/fanout) e binding keys, e channels multiplexando uma conexão TCP.",
+    "relatedTopics": [
+      "event-sourcing",
+      "cqrs",
+      "saga",
+      "data-replication",
+      "concurrency-parallelism",
+      "resilience-patterns",
+      "sharding-partitioning"
+    ],
+    "relatedPatterns": [
+      "domain-event",
+      "transactional-outbox",
+      "idempotent-consumer",
+      "event-sourcing",
+      "transaction-log-tailing"
+    ],
+    "tradeOffs": [
+      {
+        "dimension": "Mensagem vs Evento",
+        "pro": "Evento desacopla emissor de consumidores e escala adicionando subsistemas sem tocar no produtor.",
+        "con": "Mensagem (imperativa, 1:1) dá controle e contrato claro, mas acopla emissor e receptor."
+      },
+      {
+        "dimension": "Kafka acks (confiabilidade vs throughput)",
+        "pro": "acks alto (all) garante durabilidade da entrega do evento.",
+        "con": "Mais ACKs = menor throughput; acks=0 maximiza throughput sacrificando garantia de entrega."
+      },
+      {
+        "dimension": "Chave de partição",
+        "pro": "Garante ordem e continuidade por cliente/agregado na mesma partição.",
+        "con": "Pode gerar hot partitions e desbalancear a carga entre consumidores."
+      },
+      {
+        "dimension": "Paralelismo de consumo",
+        "pro": "Partições permitem dividir a carga entre consumidores do mesmo grupo.",
+        "con": "O consumo é limitado ao nº de partições — réplicas extras de consumidor ficam ociosas."
+      }
+    ],
+    "interviewAngle": "Pergunta típica: 'fila ou tópico?' / 'mensagem ou evento?' — frase-chave: imperativo 1:1 (faça algo) vs reativo 1:N (aconteceu algo). 'Como você garante ordem?' puxa FIFO + chave de partição (e o risco de hot partition). 'Como escalar o consumo no Kafka?' testa se você sabe que partição é o teto do paralelismo. DLQ, idempotência e o trade-off acks↔throughput são pontos que demonstram experiência operacional real.",
+    "example": "No event-source-distributed-ledger, comandos chegam por tópicos Kafka (conta_criada, conta_movimentacao) e, após o commit no Event Store, confirmações são publicadas em tópicos de saída (ledger_saldo_atualizado → ScyllaDB, ledger_nova_transacao_confirmada → Mongo) — fanout de evento de domínio 1:N para múltiplos ingestores, com idempotência por movimentacao_id evitando reprocessamento de duplicatas.",
+    "diagrams": [
+      "event-sourced-ledger-flow",
+      "read-model-update"
+    ],
+    "sourceRefs": [
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.294-342"
+      },
+      {
+        "kind": "repo",
+        "source": "event-source-distributed-ledger",
+        "locator": "docker-compose.yml",
+        "note": "Tópicos Kafka inbound (comandos) e outbound (confirmações) — fanout de eventos para read models."
+      }
+    ]
+  },
+  {
+    "id": "performance-scalability",
+    "title": "Performance, Capacidade e Escalabilidade",
+    "category": "Escalabilidade",
+    "summary": "Performance é quão rápido/eficiente o sistema processa uma transação (Four Golden Signals, percentis); capacidade é o teto de trabalho antes de degradar (gargalos, backpressure); escalabilidade é adicionar/remover capacidade (vertical vs horizontal, Scale Cube).",
+    "detailedExplanation": "**Performance** mede quão rápido e eficiente o sistema processa uma transação. O workbook usa os **Four Golden Signals** (do SRE do Google) sob a ótica de performance: **Saturação/Utilização** (quanto do recurso está em uso — `utilizado/disponível × 100`; um recurso pode saturar e degradar antes de chegar a 100%), **Throughput/Tráfego** (unidades de trabalho por tempo, ex.: 6000 req/min = 100 rps), **Tempo de Resposta** (latência de rede + tempo de processamento) e **Taxa de Erros** (`erros/total × 100`). Um ponto que separa júnior de sênior: usar **percentis** em vez de só a média. Uma média de 200ms pode esconder um p95 de 700ms e p99 de 1000ms — os outliers (caudas) é que revelam o comportamento ruim sob carga e guiam capacity planning.\n\n**Capacidade** é a quantidade máxima de trabalho que o sistema processa eficazmente num período. **Gargalo = Demanda > Capacidade**: um componente que não dá vazão à carga atual. Erro comum é culpar sempre a infra — frequentemente o gargalo é código mal otimizado, algoritmo ineficiente ou má gestão de concorrência (deadlock, excesso de locks). E gargalos são móveis: ao resolver um, a carga sobe no próximo componente, criando outro. O **backpressure** (analogia hidráulica) mostra que uma corrente é tão forte quanto o elo mais fraco: num fluxo A→B→C que suporta 100/60/300 TPS, injetar 120 TPS faz B represar — o throughput final é limitado a 60 TPS, e o serviço mais performático (C) fica permanentemente ocioso. Vale ainda o **custo por transação** (`custo operacional total / nº de transações`), métrica financeira crítica em nuvem.\n\n**Escalabilidade** é a capacidade de crescer sob carga sem comprometer qualidade — ou, de forma direta (Nygard, *Release It!*), de adicionar/remover capacidade computacional. **Vertical (scale up/down)**: aumentar recursos de um único componente (CPU/RAM/disco) ou otimizar algoritmo — simples, mas com limite físico e de custo. **Horizontal (scale out/in)**: adicionar/remover réplicas idênticas atrás de um load balancer — também chamado elasticidade, exige arquitetura **stateless** (paralelismo externo). O workbook traz fórmulas práticas de autoscaling (inspiradas no HPA do Kubernetes): `Réplicas Desejadas = Réplicas Atuais × (Valor Atual / Valor Desejado)` — ex.: CPU em 200% com alvo de 80% e 6 réplicas → 15 réplicas; ou por throughput, comparando TPS por réplica com a base sustentável. Por fim, o **Scale Cube** (de *The Art of Scalability*) organiza escalabilidade em 3 eixos: **X** = escala horizontal (clonar réplicas, fácil), **Y** = decomposição de funcionalidades (quebrar monolito em microsserviços por responsabilidade), **Z** = sharding/particionamento de dados (o mais complexo — dividir a camada de persistência por sharding key, reduzindo blast radius).",
+    "relatedTopics": [
+      "sharding-partitioning",
+      "load-balancing",
+      "capacity-queueing",
+      "microservices-monoliths",
+      "resilience-patterns",
+      "observability",
+      "load-stress-testing"
+    ],
+    "relatedPatterns": [
+      "consistent-hashing",
+      "bulkhead",
+      "cell-based-architecture"
+    ],
+    "tradeOffs": [
+      {
+        "dimension": "Escala vertical vs horizontal",
+        "pro": "Vertical é simples (mais CPU/RAM no mesmo nó), sem mudar a arquitetura.",
+        "con": "Vertical tem teto físico/custo; horizontal escala 'infinito' mas exige stateless + load balancer + coordenação."
+      },
+      {
+        "dimension": "Média vs Percentis",
+        "pro": "Percentis (p95/p99) expõem outliers que afetam a experiência real do usuário.",
+        "con": "Olhar só a média mascara caudas longas e leva a subdimensionar capacidade."
+      },
+      {
+        "dimension": "Eixo Z do Scale Cube (sharding)",
+        "pro": "Escala a camada de dados de forma quase horizontal e reduz blast radius.",
+        "con": "É o eixo mais complexo: exige roteamento por sharding key, rebalanceamento e cuidado com hot partitions."
+      }
+    ],
+    "interviewAngle": "Sempre presente em estimativas de capacidade ('quantas instâncias para X rps?') — use a fórmula TPS-por-réplica e ancore em percentis, não em média. 'Onde está o gargalo?' puxa backpressure (elo mais fraco) e a ideia de que gargalo se move. Citar o Scale Cube (X clonar, Y decompor, Z shardear) dá um mapa mental forte para responder 'como escalo esse sistema?'. Lembre que stateless é pré-requisito do eixo X.",
+    "example": "O msc-shard-router é o eixo Z do Scale Cube na prática: distribui requisições por sharding key (id_client) via hash consistente, escalando a camada mais delicada (dados/roteamento) horizontalmente e contendo o blast radius por shard. Já adicionar réplicas do msc-transactions-api atrás de um LB é o eixo X; quebrar o ledger em ledger/balance/statement é o eixo Y.",
+    "diagrams": [
+      "shard-router-flow",
+      "architecture-overview"
+    ],
+    "sourceRefs": [
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.343-371"
+      },
+      {
+        "kind": "repo",
+        "source": "msc-shard-router",
+        "locator": "pkg/sharding/",
+        "note": "Sharding por chave (eixo Z do Scale Cube) escalando a camada de dados/roteamento horizontalmente."
+      }
+    ]
+  },
+  {
+    "id": "sharding-partitioning",
+    "title": "Sharding e Particionamento",
+    "category": "Escalabilidade",
+    "summary": "Dividir grandes conjuntos de dados em partes menores (shards) distribuídas entre nós. A escolha da sharding key (alta cardinalidade) é o passo decisivo; má distribuição gera hot partitions. Hashing simples quebra ao mudar nós — daí o hashing consistente.",
+    "detailedExplanation": "**Sharding** (particionamento) divide grandes conjuntos de dados em partes menores — os **shards** — cada um representando uma fração do todo, possivelmente em servidores distintos. Isso melhora escalabilidade (horizontal: novos servidores para novos shards), performance (leituras/escritas distribuídas, sem gargalo num único nó) e disponibilidade (se um shard cai, os outros seguem operando com funcionalidade reduzida, em vez de falha total). Não se limita a bancos: aplica-se a cache distribuído, distribuição de cargas em microsserviços e até segmentação de tráfego. Há topologias além do óbvio: **segregação de dados** (isolar tenants/dados sensíveis por compliance ou segurança em shards dedicados) e **segregação computacional** (isolar operações pesadas — ML, cálculos em tempo real — em shards com hardware específico, para não afetar operações leves).\n\nA primeira pergunta — e a mais importante, **antes de escolher tecnologia** — é 'particionar baseado em quê?'. A **sharding key** é o critério que decide em qual partição o dado vai. Uma boa chave tem **alta cardinalidade** (muitos valores únicos → distribuição uniforme) e idealmente é um campo frequentemente acessado nas consultas (ID, data, categoria, hash do tenant). O fracasso da chave gera **hot partitions**: uma ou poucas partições recebem carga desproporcional. O exemplo clássico é sharding por inicial do nome (há muito mais 'A-E' que 'W-Z'), mas pode acontecer até com hash, se 3 clientes que somam 50% do uso caírem na mesma partição. Mitigações: chaves mais aleatórias/uniformes, pré-particionamento por padrões conhecidos, **isolar** clientes 'quentes' em shards dedicados, e caching para aliviar leituras.\n\nAs estratégias têm trade-offs nítidos. **Por ranges** (de iniciais, IDs sequenciais ou datas) é intuitivo e permite consultas por intervalo e **tiers de storage** (hot/warm/cold por idade do dado, otimizando custo), mas tende a transbordo e desbalanceamento. **Por hashing** aplica uma função hash na chave e faz `hash % N_shards` — distribui bem e é barato de calcular, mas tem um defeito fatal para dados persistentes: **se o número de servidores muda (falha ou adição), o módulo muda e quase todas as referências se perdem**, exigindo redistribuição massiva. A solução é **Hashing Consistente**: mapeia nós e dados num **hash ring** (anel); cada dado vai ao primeiro nó em sentido horário. Ao adicionar/remover um nó, só os dados entre ele e o vizinho precisam migrar — minimizando (não eliminando) a realocação. Réplicas virtuais no anel suavizam a distribuição. Vale também o **Shuffle Sharding**: técnica avançada que combina sharding com replicação — cada cliente recebe um subconjunto embaralhado de shards (primário + secundários), reduzindo drasticamente o **blast radius** (a falha fica restrita aos shards daquele cliente) com modos de consistência forte (escrita confirmada em N shards) ou eventual.",
+    "relatedTopics": [
+      "performance-scalability",
+      "data-replication",
+      "cell-based",
+      "bulkhead",
+      "databases-indexing",
+      "caching",
+      "spof-dr"
+    ],
+    "relatedPatterns": [
+      "consistent-hashing",
+      "database-per-service",
+      "bulkhead",
+      "cell-based-architecture"
+    ],
+    "tradeOffs": [
+      {
+        "dimension": "Hashing simples vs consistente",
+        "pro": "Hash simples (mod N) é trivial e distribui bem com N fixo.",
+        "con": "Mudar N reembaralha quase tudo; hashing consistente migra só uma fatia, ao custo de implementar o ring + réplicas virtuais."
+      },
+      {
+        "dimension": "Sharding por range",
+        "pro": "Permite consultas por intervalo e tiers de storage (hot/warm/cold) por idade do dado.",
+        "con": "Propenso a transbordo e hot partitions (ranges populares como 'A-E' ou o ano corrente)."
+      },
+      {
+        "dimension": "Escolha da sharding key",
+        "pro": "Chave de alta cardinalidade distribui uniformemente e reduz blast radius por shard.",
+        "con": "Chave ruim concentra carga em poucas partições (hot partition) e degrada o sistema todo."
+      },
+      {
+        "dimension": "Shuffle sharding",
+        "pro": "Isola falhas/abuso ao subconjunto de shards do cliente, com redundância de leitura/escrita.",
+        "con": "Mais complexo: gerencia embaralhamento, múltiplos primários/secundários e modos de consistência."
+      }
+    ],
+    "interviewAngle": "O coração é 'qual sua sharding key e por quê?' — defenda alta cardinalidade e acesso frequente, e antecipe hot partitions com exemplo concreto. A pegadinha clássica: 'o que acontece quando você adiciona um shard?' — quem responde 'hash % N reembaralha tudo, por isso hashing consistente' ganha pontos. Para resiliência, citar shuffle sharding e blast radius mostra leitura avançada.",
+    "example": "O msc-shard-router implementa exatamente isto: hash consistente (SHA-512 default, com SHA-256/SHA-1/MurmurHash3 configuráveis) sobre a sharding key (header id_client), com réplicas virtuais para evitar hotspots e busca binária O(log n) no ring — estável quando shards são adicionados/removidos. Cada shard isolado funciona como bulkhead, contendo falhas (blast radius reduzido), como descrito no workbook.",
+    "diagrams": [
+      "shard-router-flow"
+    ],
+    "sourceRefs": [
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.372-405"
+      },
+      {
+        "kind": "repo",
+        "source": "msc-shard-router",
+        "locator": "pkg/hashring/",
+        "note": "Hashing consistente com réplicas virtuais e busca binária O(log n); HASHING_ALGORITHM/SHARDING_KEY configuráveis."
+      },
+      {
+        "kind": "reference",
+        "source": "microservices.io",
+        "locator": "patterns/data/database-per-service.html"
+      }
+    ]
+  },
+  {
+    "id": "data-replication",
+    "title": "Replicação de Dados",
+    "category": "Dados",
+    "summary": "Manter cópias do mesmo dado em locais distintos para disponibilidade, durabilidade e performance. Modelos primary-replica vs multi-master; estratégias síncrona/assíncrona/semi-síncrona; e padrões como replicação por logs, CDC, Event-Carried State Transfer e CRDTs.",
+    "detailedExplanation": "Replicação é criar uma ou mais cópias do mesmo dado em locais diferentes (nós, datacenters, regiões de nuvem) para garantir disponibilidade, tolerância a falhas e, frequentemente, performance de leitura. Os dois **modelos** base: **Primary-Replica** (um nó primário recebe todas as escritas e replica para réplicas que servem leituras) — ótimo para cargas read-intensive e base natural do CQRS, mas o primário é um **ponto único de falha** (se cai, promover uma réplica leva tempo e pode exigir intervenção manual). **Primary-Primary / Multi-Master** (vários nós aceitam leitura **e** escrita, replicando entre si) — elimina o SPOF e escala escrita, mas introduz o problema duro de **resolução de conflitos** quando dois primários escrevem o mesmo dado simultaneamente (ex.: ordenação por timestamp).\n\nAs **estratégias** definem *quando* a operação é considerada concluída. **Síncrona**: a escrita só confirma depois que **todos** os nós gravaram — garante **consistência forte** (todos respondem o mesmo dado a qualquer momento), ideal para pagamentos/finanças, mas aumenta latência (especialmente com nós geo-distribuídos); two-phase commit é uma técnica comum. **Assíncrona**: confirma a escrita sem esperar todas as réplicas — maior desempenho de escrita, ao custo de janelas de **consistência eventual** (leituras podem ver versões diferentes até a propagação); usada em redes sociais, CDN, cache. **Semi-síncrona**: ao menos uma réplica (ou subconjunto) confirma de forma síncrona, o resto assíncrono — equilíbrio entre durabilidade e latência (ex.: MySQL/MariaDB). Há ainda a distinção **total** (cada nó tem cópia completa — máxima disponibilidade, mais custo/latência de escrita) vs **parcial** (cada nó tem só uma fração — eficiente em storage, mas leituras podem precisar consultar vários nós; combina com sharding/hashing consistente).\n\nUm modelo central para System Design é a **Replicação por Logs**: em vez de replicar o estado completo, replica-se o **log sequencial de operações**, e cada réplica reaplica as mudanças localmente. Reduz dados trafegados e é a base de Kafka (logs de partição replicados entre brokers), de algoritmos de consenso (Paxos, Raft — usado em etcd/ScyllaDB/Consul/CockroachDB, Viewstamped Replication) e do write-ahead log. Outras abordagens arquiteturais: **Event-Carried State Transfer** — toda atualização de uma entidade vira evento; serviços dependentes consomem e mantêm uma cópia local em cache do estado, evitando consultar a fonte central a cada request (combina cache + eventos + replicação, custoso porém poderoso, exige tolerar consistência eventual). **Change Data Capture (CDC)** — captura inserts/updates/deletes direto do banco e os transmite em tempo real para tópicos/sistemas, sem sobrecarregar a origem com polling; é a ponte reativa que alimenta Event-Carried State Transfer, datalakes, caches e CQRS. E **CRDTs** (Conflict-Free Replicated Data Types) — estruturas cujas operações são associativas, comutativas e idempotentes, garantindo convergência automática para o mesmo estado final independente da ordem, sem locks nem coordenação — ideais para multi-master (ex.: edição colaborativa de documentos).",
+    "relatedTopics": [
+      "cap-acid-base",
+      "pacelc",
+      "sharding-partitioning",
+      "cqrs",
+      "event-sourcing",
+      "messaging-streaming",
+      "spof-dr",
+      "concurrency-parallelism"
+    ],
+    "relatedPatterns": [
+      "cqrs",
+      "transaction-log-tailing",
+      "domain-event",
+      "event-sourcing"
+    ],
+    "tradeOffs": [
+      {
+        "dimension": "Primary-Replica vs Multi-Master",
+        "pro": "Primary-Replica é simples e ótimo para leitura intensiva (escrita só no primário).",
+        "con": "Primário é SPOF; multi-master remove o SPOF e escala escrita, mas exige resolver conflitos de escrita concorrente."
+      },
+      {
+        "dimension": "Síncrona vs Assíncrona",
+        "pro": "Síncrona dá consistência forte (crítico em finanças); assíncrona dá alto throughput de escrita.",
+        "con": "Síncrona adiciona latência (espera todos os nós); assíncrona abre janelas de consistência eventual nas leituras."
+      },
+      {
+        "dimension": "Replicação total vs parcial",
+        "pro": "Total maximiza disponibilidade (qualquer nó atende); parcial economiza storage e reduz latência de escrita.",
+        "con": "Total custa storage e latência de escrita; parcial complica leituras (pode consultar vários nós)."
+      },
+      {
+        "dimension": "CRDTs",
+        "pro": "Convergem sem locks nem coordenação, aumentando disponibilidade em multi-master.",
+        "con": "Exigem modelar os dados com operações comutativas/idempotentes — nem todo caso de uso encaixa."
+      }
+    ],
+    "interviewAngle": "Conecta direto com CAP/PACELC: 'replicação síncrona vs assíncrona' é escolher consistência vs latência. 'Como evitar o SPOF do primário?' puxa multi-master + conflitos (LWW/CRDT). Saber que Kafka/Raft replicam por log (não por estado) e citar CDC como motor de CQRS/Event-Carried State Transfer demonstra que você liga replicação a arquiteturas event-driven reais.",
+    "example": "O event-source-distributed-ledger usa o Postgres (Event Store, append-only) como golden source e replica o estado para read models assíncronos via Kafka — ScyllaDB (saldo) e MongoDB (extrato). É replicação assíncrona com consistência eventual, alimentada por eventos pós-commit (parente do CDC/Event-Carried State Transfer); a unicidade movimentacao_id + LWT por versão no ScyllaDB resolve a ordenação descrita no modelo de logs.",
+    "diagrams": [
+      "event-sourced-ledger-flow",
+      "read-model-update"
+    ],
+    "sourceRefs": [
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.406-419"
+      },
+      {
+        "kind": "repo",
+        "source": "event-source-distributed-ledger",
+        "locator": "balance/consumer.go",
+        "note": "Read model replicado de forma assíncrona (ScyllaDB) com LWT por versão — consistência eventual + ordenação por log."
+      }
+    ]
+  },
+  {
+    "id": "cqrs",
+    "title": "CQRS (Command Query Responsibility Segregation)",
+    "category": "Dados",
+    "summary": "Separar responsabilidades de escrita (commands: imperativos, modelo normalizado/ACID) e leitura (queries: modelos desnormalizados otimizados). Sincronizados por eventos, com consistência eventual; o dual-write entre banco e broker é resolvido pelo Outbox Pattern.",
+    "detailedExplanation": "CQRS separa as responsabilidades de **escrita** e **leitura** em modelos de dados distintos. As escritas são **commands** — imperativas, mudam o estado de entidades, concentram regras de negócio e validações, e privilegiam **consistência e integridade** (tipicamente banco relacional normalizado com transações ACID; muitas vezes um Rich Domain Model). As leituras são **queries** — não alteram estado, e usam modelos otimizados para recuperação rápida (desnormalização, caching, réplicas de leitura, ou NoSQL orientado a documentos com estrutura próxima do payload de response). O ganho central é poder **escalar escrita e leitura independentemente**, com infraestrutura e modelagem específicas para cada tarefa. O exemplo do workbook é um sistema hospitalar: o modelo de escrita normaliza Médicos/Pacientes/Medicamentos/Prescrições garantindo integridade referencial; o modelo de leitura cria uma view desnormalizada `vw_prescricoes_medicamentos_detalhadas` que elimina os múltiplos JOINs, entregando a triagem da farmácia com um SELECT simples.\n\nA sincronização entre os modelos é o ponto delicado. Fazer a carga via SELECT da base inteira é inviável em volume; o caminho saudável é usar **mensageria/eventos** como intermediário: após o command persistir, um evento atualiza o modelo de leitura de forma **assíncrona**. Isso desacopla e permite escalar cada lado, mas introduz **consistência eventual** — há um atraso até a leitura refletir a última escrita, e isso precisa ser previsto e aceito no design. Em escala, o próprio modelo de leitura pode saturar; daí o uso de **réplicas read-only** dedicadas às queries, deixando a instância primária só para offload de escrita. E com **NoSQL** (ex.: Elasticsearch/Mongo) o read model fica muito próximo do response da API, ao custo de a aplicação conhecer 'dois dialetos' e traduzir entre eles. CQRS também brilha em **sistemas distribuídos**: consolida dados de vários microsserviços (cada um com seu database) numa view de leitura via eventos — alternativa a ETL em batch ou a API Composition (que acopla serviços e arrisca disponibilidade).\n\nO risco de correção mais importante do CQRS é o **dual-write**: o command precisa fazer **dois** passos — persistir no banco **e** publicar o evento. Se um falha e o outro não, o sistema fica inconsistente (dado salvo mas evento não publicado → leitura nunca atualiza; ou evento publicado sem o dado existir → leitura mostra algo que não foi efetivado). A primeira mitigação é o **Dual-Write Pattern** com transação ACID englobando escrita + publicação, com rollback se algo falhar. Mais robusto é o **Transactional Outbox Pattern**: o evento é gravado numa **tabela outbox dentro da mesma transação** que persiste o estado (garantindo atomicidade); depois, um **relay/message publisher** assíncrono lê a outbox sequencialmente, publica no broker e marca como processado (ou remove). Os três componentes — tabela outbox, processo de publicação e gestão de erros (retries, monitoramento) — são o que torna o padrão de fato resiliente. O custo: leitura/escrita constante na tabela outbox pressiona o banco transacional e pode virar gargalo de escala.",
+    "relatedTopics": [
+      "event-sourcing",
+      "messaging-streaming",
+      "data-replication",
+      "saga",
+      "cap-acid-base",
+      "databases-indexing",
+      "microservices-monoliths"
+    ],
+    "relatedPatterns": [
+      "cqrs",
+      "transactional-outbox",
+      "polling-publisher",
+      "domain-event",
+      "event-sourcing",
+      "api-composition",
+      "transaction-log-tailing"
+    ],
+    "tradeOffs": [
+      {
+        "dimension": "Performance de leitura vs consistência",
+        "pro": "Modelos de leitura desnormalizados/NoSQL respondem rápido e escalam separados da escrita.",
+        "con": "A sincronização por eventos traz consistência eventual — a leitura pode estar atrasada em relação à escrita."
+      },
+      {
+        "dimension": "Complexidade",
+        "pro": "Escrita e leitura escalam e evoluem de forma independente, cada uma com a tecnologia ideal.",
+        "con": "Dois (ou mais) modelos de dados, pipeline de sincronização e 'dois dialetos' aumentam muito a complexidade operacional."
+      },
+      {
+        "dimension": "Dual-Write vs Outbox",
+        "pro": "Outbox garante atomicidade real (evento na mesma transação do estado) e tolera queda do broker.",
+        "con": "A tabela outbox adiciona leitura/escrita constante no banco transacional, podendo virar gargalo em escala."
+      }
+    ],
+    "interviewAngle": "Quase sempre vem junto com 'como você sincroniza o write model e o read model?' — a resposta de impacto é: eventos + consistência eventual, e o problema do dual-write resolvido por Outbox (não dual-write ingênuo). 'O que acontece se o broker cair depois do commit?' é a pegadinha que separa quem decorou de quem entendeu. Saber que CQRS não exige Event Sourcing (mas combinam bem) e citar réplicas de leitura para escalar o read model demonstra profundidade.",
+    "example": "O event-source-distributed-ledger é CQRS distribuído: o command (movimentação) persiste no Event Store ACID (Postgres) e, no mesmo escopo transacional, materializa os read models; as confirmações são publicadas pós-commit no Kafka, alimentando ScyllaDB (saldo) e MongoDB (extrato) — read models otimizados por tarefa. A publicação pós-commit é justamente a defesa contra o dual-write descrita no workbook (Outbox/atomicidade).",
+    "diagrams": [
+      "cqrs",
+      "read-model-update",
+      "transactional-api-flow"
+    ],
+    "sourceRefs": [
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.420-448"
+      },
+      {
+        "kind": "repo",
+        "source": "event-source-distributed-ledger",
+        "locator": "ledger/main.go",
+        "note": "Command persiste + publica pós-commit; read models (Scylla/Mongo) atualizados via eventos — defesa contra dual-write."
+      },
+      {
+        "kind": "reference",
+        "source": "microservices.io",
+        "locator": "patterns/data/cqrs.html"
+      }
+    ]
+  },
+  {
+    "id": "saga",
+    "title": "Saga Pattern",
+    "category": "Resiliência",
+    "summary": "Garante consistência em transações distribuídas/longas decompondo-as em transações locais menores, cada uma com sua compensação (rollback). Dois modelos: orquestrado (coordenador central + máquina de estado) e coreografado (serviços encadeados via eventos).",
+    "detailedExplanation": "Saga é um padrão para garantir consistência em **transações distribuídas** (que atravessam múltiplos microsserviços/bancos) ou **longas** (que levam de milissegundos a semanas — cobrança parcelada, fechamento de fatura), onde execução parcial é indesejável. Origem acadêmica: Garcia-Molina e Salem (Princeton, 1987), para tratar **Long-Lived Transactions** que não podiam bloquear recursos até concluir. A proposta é decompor uma transação longa numa **sequência de transações menores e locais**, cada uma confirmável ou desfeita de forma independente. Se um passo falha, a saga aciona **transações compensatórias** que revertem os passos já executados, devolvendo o sistema a um estado consistente. O ponto-chave de System Design: a Saga **troca performance por confiabilidade/consistência** — e ela é a alternativa ao Two-Phase Commit (2PC) síncrono, que é caro, vira gargalo em alta demanda e é difícil de restabelecer após falha. O problema que resolve é clássico: num pedido de e-commerce (Pedidos→Pagamento→Estoque→Entrega), se o estoque falha *depois* de o pagamento ter sido cobrado, sem Saga o sistema fica inconsistente (pagou mas não entregou).\n\nDois modelos de implementação. No **Orquestrado**, há um componente central — o orquestrador — que monta o 'mapa da saga', envia comandos (pattern command/response, geralmente assíncrono via tópicos de ação e resposta), aguarda as respostas e decide o próximo passo, ou compensa em caso de falha. Ele depende de uma **Máquina de Estado**: estados (NOVO, RESERVADO, COBRANDO, COBRADO, INICIAR_ENTREGA, FINALIZADO...), eventos (Pagamento Aprovado, Item Indisponível), transições e ações. A lógica é sempre 'que evento recebi? onde estou? para onde vou? o que faço aqui?'. Vantagem: centraliza a complexidade, dá visibilidade total (métricas, início/fim, histórico) e **rastreabilidade** via logs de saga — permitindo monitorar, retomar e reiniciar passos que falharam. No **Coreografado**, não há coordenador: cada microsserviço conhece o próximo e o anterior, executa seu passo e publica um evento que dispara o seguinte (numa malha de serviços). É mais simples, mas tem menos garantias e visibilidade; a compensação também é encadeada (o serviço que falhou notifica o anterior ou aciona um 'botão do pânico'). Boa prática em ambos: expor cada ação junto da sua reversão — `reservaPassagens()`/`liberaPassagens()`, `cobrarPedido()`/`estornarCobranca()`.\n\nO desafio de correção mais sério da Saga é o **dual-write**, igual ao do CQRS: cada serviço precisa gravar no seu banco **e** publicar o evento para o próximo passo. Se o dado é salvo mas o evento não é emitido (broker indisponível), ou vice-versa, a saga pode ficar 'perdida' — etapas presas no meio sem confirmação. A defesa eficiente é executar a publicação **dentro da transação ACID** e só comitar quando a comunicação concluir, ou usar **Outbox Pattern + CDC** para dar característica transacional ao controle dos steps (especialmente no orquestrado, com um relay lendo uma 'fila' no banco). Para falhas significativas, escolhe-se entre **compensação em massa** (um tópico de compensação com vários consumer groups, cada serviço desfazendo o que confirmou) ou **reinicialização de saga** — que **exige idempotência** em todos os participantes: receber o mesmo comando várias vezes sem efeito colateral, para o coordenador poder reiniciar a saga inteira ou só os steps incompletos, a partir do ponto sem resposta.",
+    "relatedTopics": [
+      "cqrs",
+      "event-sourcing",
+      "messaging-streaming",
+      "resilience-patterns",
+      "microservices-monoliths",
+      "cap-acid-base",
+      "data-replication"
+    ],
+    "relatedPatterns": [
+      "saga",
+      "transactional-outbox",
+      "idempotent-consumer",
+      "domain-event",
+      "transaction-log-tailing",
+      "cqrs"
+    ],
+    "tradeOffs": [
+      {
+        "dimension": "Saga vs Two-Phase Commit",
+        "pro": "Saga é assíncrona, não bloqueia recursos e escala melhor em ambientes distribuídos.",
+        "con": "Abre mão de atomicidade imediata (consistência eventual) e exige escrever lógica de compensação para cada passo."
+      },
+      {
+        "dimension": "Orquestrado vs Coreografado",
+        "pro": "Orquestrado centraliza a lógica, dá rastreabilidade (logs/máquina de estado) e controle de compensação.",
+        "con": "Coreografado é mais simples e desacoplado, mas com menos visibilidade e mais difícil de depurar/retomar; o orquestrador vira ponto crítico."
+      },
+      {
+        "dimension": "Confiabilidade vs Performance",
+        "pro": "Garante que a transação distribuída termine consistente ou seja totalmente compensada.",
+        "con": "Paga em performance e latência: muitos passos, esperas e compensações; consistência só eventual."
+      },
+      {
+        "dimension": "Reinicialização de saga",
+        "pro": "Permite retomar do ponto de falha em vez de compensar tudo.",
+        "con": "Só funciona se todos os participantes forem idempotentes — caso contrário, reprocessar duplica efeitos."
+      }
+    ],
+    "interviewAngle": "É o pico de System Design distribuído: 'como manter consistência entre pagamento, estoque e entrega sem 2PC?'. Resposta forte: Saga com compensações, escolhendo orquestrado (controle/rastreabilidade) vs coreografado (simplicidade/desacoplamento). As duas pegadinhas que separam sênior: (1) o dual-write entre banco e broker — resolvido com Outbox/transação; (2) idempotência obrigatória para retry/reinício. Desenhar a máquina de estado e nomear pares ação/compensação impressiona.",
+    "example": "O event-source-distributed-ledger fornece as peças de uma Saga financeira: comandos por Kafka, transações locais ACID no Event Store, idempotência por movimentacao_id e publicação pós-commit (defesa contra dual-write). Uma saga orquestrada de débito-entre-contas encadearia debitar→creditar com compensação estornar() em caso de falha, usando a unicidade do id para tornar cada step idempotente e seguro para reinício — exatamente os mecanismos de compensação e reinicialização do workbook.",
+    "diagrams": [
+      "saga-orchestration",
+      "saga-choreography",
+      "financial-movement"
+    ],
+    "sourceRefs": [
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.449-474"
+      },
+      {
+        "kind": "repo",
+        "source": "event-source-distributed-ledger",
+        "locator": "ledger/main.go",
+        "note": "Idempotência por movimentacao_id + publicação pós-commit — base para steps de saga idempotentes e seguros contra dual-write."
+      },
+      {
+        "kind": "reference",
+        "source": "microservices.io",
+        "locator": "patterns/data/saga.html"
+      }
+    ]
+  },
+  {
+    "id": "event-sourcing",
+    "title": "Event Sourcing",
+    "category": "Dados",
+    "summary": "Padrão que persiste cada mudança de estado como um evento imutável num log append-only (Event Store), derivando o estado atual ao reaplicar a sequência de eventos em vez de sobrescrever o registro.",
+    "detailedExplanation": "O Event Sourcing inverte o paradigma tradicional de persistência. Em vez de manter apenas o **estado atual** de uma entidade — onde cada `INSERT`/`UPDATE`/`DELETE` substitui e apaga o histórico (o chamado *state mutation*) — o sistema acumula uma sequência ordenada e imutável de **fatos que já aconteceram**. Cada operação vira um evento que registra \"algo aconteceu\" e fica permanentemente gravado. O estado deixa de ser a \"última atualização\" e passa a ser a *reaplicação determinística* de todos os eventos daquele agregado. Ex.: `PagamentoCriado(100)` → `PagamentoConfirmado` → `PagamentoEstornado`; reaplicando os três, reconstituímos exatamente onde a entidade chegou e *como* chegou lá. Isso entrega sistemas auditáveis, reproduzíveis e naturalmente reativos, mas exige maturidade de engenharia alta.\n\nOs componentes centrais são: **Agregado** (unidade lógica/transacional que valida e ordena os eventos, garantindo consistência interna); **Event Store** (o banco append-only tratado como *ledger* imutável — a *golden source* dos fatos; ordenação e atomicidade são o ponto crítico, garantidas por exemplo por `UNIQUE(aggregate_id, version)`); **Event Bus / Publishers** (propagam, de forma **atômica e pós-commit**, os eventos confirmados para outros domínios); e **Projections + Read Models** (processos que \"ouvem\" os eventos e materializam visões otimizadas para leitura). O Event Store é otimizado para escrita intensiva e ruim para consulta — por isso a leitura é sempre delegada a Read Models derivados, tipicamente via CQRS.\n\nO acoplamento entre escrita (eventos) e leitura (projections) admite três regimes: **transacional/atômico** (evento + projection commitam juntos — consistência imediata, mas sobrecarrega o Event Store); **semissíncrono** (mitigado por *Transactional Outbox* — escreve junto, publica depois async); e **assíncrono/eventual** (Read Models construídos nos domínios consumidores, liberando totalmente o Event Store). A reconstituição do estado a partir do log chama-se **Rehydration**; quando o histórico fica grande demais, usa-se **Snapshotting** (fotografias periódicas do estado + índice do último evento, recalculando só o delta — mas snapshots são artefatos descartáveis, nunca a fonte de verdade). Como o Event Bus não garante ordem **global** de consumo, em consistência eventual aplica-se **Last-Write-Wins** (cada evento carrega `id` único e `version` incremental ou timestamp; o consumidor só aplica versões maiores) e **idempotência distribuída** forte em todos os domínios downstream, já que entrega/reprocessamento são não-determinísticos.",
+    "relatedTopics": [
+      "cqrs",
+      "saga",
+      "data-replication",
+      "messaging-streaming",
+      "cap-acid-base"
+    ],
+    "relatedPatterns": [
+      "event-sourcing",
+      "cqrs",
+      "domain-event",
+      "transactional-outbox",
+      "idempotent-consumer"
+    ],
+    "tradeOffs": [
+      {
+        "dimension": "Auditabilidade",
+        "pro": "Histórico completo e imutável de tudo que aconteceu — ideal para domínios regulados (contábil, farmacêutico, prontuários)",
+        "con": "Custo de armazenamento cresce indefinidamente e o reprocessamento de milhões de eventos é computacionalmente caro"
+      },
+      {
+        "dimension": "Leitura",
+        "pro": "Read Models materializados podem ser otimizados e descartados/reconstruídos a qualquer momento",
+        "con": "Estado nunca está pronto: precisa ser derivado por rehydration ou consultado em projection, com latência e consistência eventual"
+      },
+      {
+        "dimension": "Complexidade",
+        "pro": "Estado reconstruível, reprocessável e naturalmente event-driven",
+        "con": "Exige snapshotting, versionamento, idempotência e LWW corretos — alta carga cognitiva e operacional"
+      }
+    ],
+    "interviewAngle": "Aparece quando o entrevistador pede um sistema com requisito forte de auditoria/rastreabilidade (ledger financeiro, carteira, estoque). O ponto de maturidade é saber que Event Store é write-optimized e que leitura SEMPRE vem de Read Model via CQRS; e explicar como você garante ordem e não-duplicação (version por agregado + idempotência + LWW). Cuidado clássico: NÃO publicar no Event Bus antes do commit (dual-write).",
+    "example": "O repo `event-source-distributed-ledger` implementa isto literalmente: o serviço `ledger` consome o comando `conta_movimentacao` do Kafka, abre uma transação Postgres, faz append do evento na tabela `events` com `UNIQUE(aggregate_id, version)` (locking otimista), e só APÓS o commit publica confirmações em tópicos como `ledger_saldo_atualizado`. Os ingestors atualizam Read Models em ScyllaDB (saldo) e MongoDB (extrato), aplicando LWW via `UPDATE ... IF version < ?` e idempotência por `movimentacao_id` único.",
+    "diagrams": [
+      "event-sourced-ledger-flow",
+      "cqrs"
+    ],
+    "sourceRefs": [
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.475-495",
+        "note": "capítulo Event Sourcing Pattern: Event Store, projections, rehydration, snapshotting, LWW, idempotência"
+      },
+      {
+        "kind": "repo",
+        "source": "event-source-distributed-ledger",
+        "locator": "ledger/main.go, database/migrations/",
+        "note": "Event Store Postgres append-only com UNIQUE(aggregate_id, version)"
+      },
+      {
+        "kind": "reference",
+        "source": "microservices.io",
+        "locator": "patterns/data/event-sourcing.html"
+      }
+    ]
+  },
+  {
+    "id": "resilience-patterns",
+    "title": "Patterns de Resiliência",
+    "category": "Resiliência",
+    "summary": "Conjunto de estratégias — timeouts, retries, circuit breaker, fallbacks, graceful degradation, backpressure, idempotência — para manter o sistema operando (total, parcial ou degradado) mesmo quando componentes falham.",
+    "detailedExplanation": "Resiliência é a capacidade de um sistema **suportar falhas e manter operação**, total ou parcial. Não é sinônimo de disponibilidade: disponibilidade é o *resultado* (medida por taxa de erro — `erros/total × 100` → `100 − taxa` — ou por uptime — `tempo operacional/tempo total`), e resiliência é o *conjunto de estratégias* que sustenta essa disponibilidade. O ponto de partida conceitual é o **Blast Radius**: o raio de impacto de uma falha. A prática recomendada são as \"perguntas provocativas\" em revisão arquitetural — \"se o componente X cair, o que para? o que segue parcial? em quanto tempo recupero? gero inconsistência?\" — para descobrir pontos críticos antes do incidente.\n\nA \"caixa de ferramentas\" cobre várias camadas. **Idempotência** é o alicerce: garantir que repetir a mesma operação produz o mesmo resultado sem efeitos colaterais (duplicidade), normalmente via *chave de idempotência* (header/param único verificado antes de processar) — é o que torna retries seguros. **Timeouts** (de conexão, de leitura/escrita, idle) evitam que chamadas presas causem falhas em cascata por exaustão de conexões. **Retries** vão do mais simples (imediato em memória — útil mas perde tentativas se o runtime cair e pode agravar a sobrecarga) ao assíncrono (enfileirado em broker, robusto mas com mais componentes), passando por **backoff exponencial** (1s, 2s, 4s, 8s… alivia o alvo) e **jitter** (aleatoriza o intervalo para evitar *thundering herd* de retries sincronizados). **Circuit Breaker** protege contra cascata: como um disjuntor, monitora falhas e, ao ultrapassar o threshold, \"desarma\" (estado *aberto*), bloqueando chamadas por um período de resfriamento; depois testa em *semiaberto* com tráfego limitado e fecha se houver sucesso. **Throttling e Rate Limiting** controlam o fluxo de entrada para não exceder limites conhecidos.\n\nNo topo estão os mecanismos de continuidade: **Fallbacks** dão rotas alternativas para o mesmo objetivo, sacrificando custo, latência ou consistência — por redundância (gateway de pagamento secundário), por snapshot de dado (cache/snapshot quando a fonte quente cai), por fluxo assíncrono (trocar resposta síncrona por fila quando o SMTP/DB falha) ou contratual (parceiro mais caro de backup). Fallbacks raros viram pontos de falha; por isso o acionamento **proativo** (mandar % mínima de tráfego pra rota alternativa) os mantém saudáveis. **Graceful Degradation** é preventiva e intencional: sob pico, o sistema desativa funções secundárias e prioriza as críticas (ex.: gateway mantém PIX e crédito, suspende boleto e consulta). E **Backpressure** ativo desacelera a produção/ingestão quando métricas de SLI/error budget indicam saturação, protegendo o downstream e reduzindo o blast radius de picos. Na camada de dados, *read-write splitting* com promoção de réplica e caching/CDN também são resiliência.",
+    "relatedTopics": [
+      "bulkhead",
+      "spof-dr",
+      "observability",
+      "load-balancing",
+      "messaging-streaming",
+      "caching"
+    ],
+    "relatedPatterns": [
+      "circuit-breaker",
+      "idempotent-consumer",
+      "health-check-api",
+      "bulkhead",
+      "transactional-outbox"
+    ],
+    "tradeOffs": [
+      {
+        "dimension": "Retries",
+        "pro": "Superam intermitências temporárias de rede/dependência de forma simples",
+        "con": "Sem backoff/jitter e sem idempotência no servidor, amplificam a sobrecarga (retry storm) e podem duplicar operações"
+      },
+      {
+        "dimension": "Circuit Breaker",
+        "pro": "Para a propagação de falhas em cascata e dá tempo de recuperação ao serviço degradado",
+        "con": "Rejeita chamadas mesmo quando algumas passariam; threshold mal calibrado abre cedo demais (falso positivo) ou tarde demais"
+      },
+      {
+        "dimension": "Fallback / Graceful Degradation",
+        "pro": "Mantém o sistema funcionando parcialmente em vez de cair por inteiro",
+        "con": "Sacrifica consistência forte, funcionalidades ou custo; fallback pouco exercitado costuma quebrar quando finalmente é acionado"
+      }
+    ],
+    "interviewAngle": "Quase toda entrevista de System Design termina em 'e se essa dependência cair?'. A resposta forte combina camadas: timeout curto → retry com backoff+jitter → circuit breaker → fallback (cache/snapshot ou fila async) → graceful degradation das funções não-críticas. Sempre amarre cada retry à idempotência no consumidor, senão você duplica. Mencione blast radius como a lente para decidir ONDE investir.",
+    "example": "O `msc-shard-router` traz um circuit breaker parametrizado (`CB_FAILURE_THRESHOLD=5`, `CB_OPEN_TIMEOUT_SEC=30`, `CB_HALF_OPEN_SUCCESS_THRESHOLD=2`) por shard de backend, exatamente nos três estados descritos. O `msc-transactions-api` usa chaves de idempotência para garantir que uma cobrança reenviada após falha de rede seja cobrada uma única vez, e mantém um `ENV=shadow` para cenários de rollback — fallback de dados via Redis cache reduz a carga sobre o Postgres em picos.",
+    "diagrams": [
+      "shard-router-flow"
+    ],
+    "sourceRefs": [
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.496-527",
+        "note": "Patterns de Resiliência: blast radius, idempotência, timeouts, retries (backoff/jitter), circuit breaker, throttling, fallbacks, graceful degradation, backpressure, resiliência na camada de dados"
+      },
+      {
+        "kind": "repo",
+        "source": "msc-shard-router",
+        "locator": "pkg/setup/",
+        "note": "circuit breaker com thresholds e timeout de open/half-open"
+      },
+      {
+        "kind": "reference",
+        "source": "microservices.io",
+        "locator": "patterns/reliability/circuit-breaker.html"
+      }
+    ]
+  },
+  {
+    "id": "observability",
+    "title": "Monitoramento e Observabilidade",
+    "category": "Observabilidade",
+    "summary": "Capacidade de inferir o estado interno de um sistema pelas suas saídas externas. Apoia-se nos três pilares (métricas, logs, traces) mais alerting/APM, e usa Service Levels (SLI/SLO/SLA/error budget) e frameworks (USE, RED, Four Golden Signals) para traduzir sinais técnicos em saúde de negócio.",
+    "detailedExplanation": "**Confiabilidade** é entregar comportamento correto ao longo do tempo, sob condições esperadas e sob uma fração de condições adversas — vai além de \"ficar de pé\". **Observabilidade** (termo da Teoria de Controle, Kalman, anos 1960) é a capacidade de **inferir o estado interno** a partir das saídas externas; é uma *propriedade estrutural* do sistema, não um conjunto de ferramentas (dá pra ter ferramenta cara e nenhuma observabilidade). A distinção-chave: **monitoramento** observa dimensões *já conhecidas* e alerta quando algo conhecido sai do normal (\"a API está lenta?\"); **observabilidade** permite *explorar* fenômenos desconhecidos e responder o *porquê* (\"por que essa API está lenta agora?\"), correlacionando sinais. Monitoramento detecta sintomas; observabilidade investiga comportamento.\n\nOs **três pilares**: **Métricas** são valores quantitativos no tempo — *counters* (só sobem: total de requests, erros, circuitos abertos), *gauges* (sobem e descem: CPU, memória, conexões ativas) e *histograms* (agregam observações em buckets para calcular percentis: \"p99 < 300ms\"). Podem ser técnicas ou de negócio (vendas, pagamentos recusados). **Traces** capturam o caminho ponta-a-ponta de uma transação por dezenas de serviços, conectando eventos numa narrativa coesa — respondem \"onde o tempo foi gasto?\". **Logs** são registros textuais imutáveis de eventos discretos, com timestamp e metadados; ganham valor quando *contam uma história* via *correlation IDs* (`trace_id`, `order_id`) e quando estruturados (JSON) para indexação barata. Os níveis de severidade carregam *intenção*: TRACE (microscopia), DEBUG (porquê de uma decisão), INFO (narrativa do fluxo de domínio), WARN (desvio recuperável — frequentemente aparece *antes* do incidente), ERROR (falha de operação) e FATAL (falha terminal de runtime). Dois agregados completam o quadro: **Alerting** (transforma sinais em intervenção, reduzindo MTTD e protegendo o error budget) e **APM** (organiza os sinais em torno da experiência da aplicação: endpoints lentos, regressões pós-deploy, dependências caras).\n\nOs **Service Levels** (origem no SRE do Google) são a linguagem comum entre engenharia e negócio. **SLI** é o indicador medido (latência, error rate, disponibilidade, saturação). **SLA** é o compromisso *contratual* com o cliente (accountability, conservador, nunca 100% — usa-se '9s': 99,9%, 99,99%). **SLO** é o objetivo *interno* do time, sempre mais restritivo que o SLA (blindagem técnica do contrato). **Error Budget** é a margem de erro restante (se SLO=99,95% e SLI real=99,98%, sobra 0,03%); quando saudável você acelera deploys, quando esgota você congela releases. Para não se afogar em métricas, os **frameworks** dão estrelas-guia: **USE** (Brendan Gregg, para *recursos*: Utilization, Saturation, Errors); **RED** (Tom Wilkie/Grafana, para *serviços*: Rate, Errors, Duration — sempre em percentis, nunca só média); e **Four Golden Signals** (Google SRE, para sistemas *user-facing*: Latency, Traffic, Errors, Saturation).",
+    "relatedTopics": [
+      "resilience-patterns",
+      "spof-dr",
+      "capacity-queueing",
+      "load-stress-testing",
+      "performance-scalability"
+    ],
+    "relatedPatterns": [
+      "application-metrics",
+      "distributed-tracing",
+      "audit-logging",
+      "health-check-api"
+    ],
+    "tradeOffs": [
+      {
+        "dimension": "Logs",
+        "pro": "Detalhe funcional máximo para troubleshooting — respondem 'o que aconteceu com a transação X'",
+        "con": "Custo altíssimo de ingestão/armazenamento (GB-TB/dia); só pagam o custo se estruturados e correlacionados por IDs"
+      },
+      {
+        "dimension": "Frameworks (USE/RED/4 Golden Signals)",
+        "pro": "Poucas métricas claras que alinham engenharia e negócio e evitam 'monitoramento por acúmulo'",
+        "con": "Simplificam demais se usados sozinhos; não substituem dimensões detalhadas para análise de causa raiz"
+      },
+      {
+        "dimension": "SLO restritivo",
+        "pro": "Protege o SLA contratual com margem de segurança e governa o ritmo de release via error budget",
+        "con": "SLO apertado demais consome budget rápido e congela entregas; frouxo demais não protege o cliente"
+      }
+    ],
+    "interviewAngle": "Sempre que você desenha um sistema, o entrevistador espera ouvir 'como você sabe que está saudável?'. Responda com os três pilares + correlation ID atravessando serviços, e proponha SLI/SLO concretos (ex.: p99<300ms, error rate<1%) com error budget governando o deploy. Saber a diferença monitoramento (conhecido) vs observabilidade (desconhecido) e citar RED para serviços / USE para infra demonstra senioridade.",
+    "example": "No `event-source-distributed-ledger`, um trace ponta-a-ponta seguiria o comando do Kong/Envoy → Kafka → ledger (commit no Event Store) → ingestor → ScyllaDB, com um `movimentacao_id` servindo de correlation ID para costurar logs dos 4 serviços. O `msc-shard-router` já expõe `/metrics` Prometheus com counters `shard_router_requests_total` e `shard_router_responses_total` rotulados por shard e status — exatamente o pilar de métricas + base para um SLO de error rate por shard.",
+    "diagrams": [
+      "architecture-overview"
+    ],
+    "sourceRefs": [
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.533-557",
+        "note": "Monitoramento e Observabilidade: três pilares, níveis de log, alerting/APM, SLI/SLO/SLA/error budget, USE/RED/Four Golden Signals"
+      },
+      {
+        "kind": "repo",
+        "source": "msc-shard-router",
+        "locator": "main.go (/metrics)",
+        "note": "métricas Prometheus por shard e status"
+      },
+      {
+        "kind": "reference",
+        "source": "microservices.io",
+        "locator": "patterns/observability/application-metrics.html"
+      }
+    ]
+  },
+  {
+    "id": "bulkhead",
+    "title": "Bulkhead Pattern",
+    "category": "Resiliência",
+    "summary": "Padrão de contenção de falhas que isola recursos em compartimentos independentes (pools de threads, filas, conexões, nodes, shards), de modo que a saturação ou falha de um não consuma a capacidade global nem se propague aos demais.",
+    "detailedExplanation": "O Bulkhead vem da engenharia naval: as paredes internas que dividem o casco em compartimentos estanques, de modo que um furo alague *apenas* uma seção e o navio continue flutuando. O objetivo **não é evitar a falha**, mas impedir sua *propagação*. Em software, parte do pressuposto de que falhas são inevitáveis em sistemas distribuídos e devem ser estruturalmente esperadas, limitadas e absorvidas. A essência não está em retry/timeout/fallback, mas na **separação explícita de domínios operacionais e de recursos finitos**: quando bem aplicado, o sistema deixa de ser um bloco homogêneo e vira um conjunto de compartimentos, cada um com capacidade, limites e blast radius próprios. Um erro comum é achar que basta isolar uma camada — se dois fluxos compartilham as mesmas conexões, filas ou databases, eles *não* têm bulkhead.\n\nHá dois grandes níveis. **Bulkheads lógicos** atuam sobre recursos de execução/concorrência: thread pools dedicados por tipo de operação (uma operação lenta não consome todas as threads), filas/tópicos independentes por domínio (um pico de eventos não-críticos não bloqueia os críticos), pools de conexão segregados, executores dedicados para integrações externas instáveis. A diferença para rate limiting global é o *escopo do impacto*: o limite global protege o sistema como um todo mas não protege os fluxos *entre si*; o bulkhead lógico cria fronteiras internas onde cada fluxo opera dentro da sua própria capacidade alocada. **Bulkheads físicos** envolvem separação concreta de infraestrutura — nodes, instâncias, AZs, regiões. São mais caros, mas dão garantias mais fortes: um workload com vazamento de memória pressiona kernel/scheduler/hypervisor e nenhum thread pool segura isso; só a segregação física contém.\n\nA matemática é direta: distribuindo clientes uniformemente em N bulkheads, o blast radius de uma falha fica em 1/N (10 bulkheads → 10% de impacto; 100 → 1%; 1000 → 0,1%) — ao custo de mais complexidade operacional. Mas o detalhe que mata é a **distribuição**: chave de particionamento enviesada ou roteamento instável concentra carga em poucos shards e anula o efeito. Sharding é a forma mais poderosa (e perigosa) de implementar bulkheads, e deve segregar *todos* os recursos do compartimento (LB, app, DB, filas) para que um fluxo iniciado num bulkhead permaneça nele. Arquiteturalmente, segrega-se por **prioridade** (capacidade reservada para fluxos críticos vs reprocessamentos), **criticidade** (compliance PCI/ISO/HIPAA isolado), **tipo de uso** (interativo sensível a latência vs batch agressivo), **segmento** (PF/PJ/enterprise), **hashing consistente** (pico de um cliente fica no shard dele em vez de vazar pra frota) e **tenant** (resolve o *noisy neighbor* em SaaS multi-tenant). É a base sobre a qual a arquitetura celular evolui.",
+    "relatedTopics": [
+      "resilience-patterns",
+      "cell-based",
+      "sharding-partitioning",
+      "spof-dr",
+      "capacity-queueing"
+    ],
+    "relatedPatterns": [
+      "bulkhead",
+      "cell-based-architecture",
+      "consistent-hashing",
+      "circuit-breaker"
+    ],
+    "tradeOffs": [
+      {
+        "dimension": "Isolamento de falha",
+        "pro": "Limita o blast radius a 1/N: uma falha vira um evento probabilístico ('X% impactado') em vez de binário ('caiu tudo')",
+        "con": "Quanto mais compartimentos, maior a complexidade operacional e o overhead de recursos reservados (capacidade ociosa em cada pool)"
+      },
+      {
+        "dimension": "Bulkhead lógico vs físico",
+        "pro": "Lógico (thread pools, filas) é barato e cobre a maioria dos casos",
+        "con": "Lógico não contém falhas de runtime/kernel/hypervisor; para shared-fate real é preciso isolamento físico, bem mais caro"
+      },
+      {
+        "dimension": "Sharding como bulkhead",
+        "pro": "Oferece isolamento estrutural forte quando bem distribuído",
+        "con": "Chave enviesada ou dependências globais compartilhadas (config, catálogo, DB auxiliar) reintroduzem acoplamento invisível que só aparece sob estresse"
+      }
+    ],
+    "interviewAngle": "Surge na pergunta 'como evitar que um cliente/feature ruim derrube todo mundo?'. A resposta forte distingue bulkhead (isola fluxos entre si) de rate limit global (protege o todo, não os fluxos). Cite thread pools/filas dedicadas para o nível lógico, nodes/AZ para o físico, e a fórmula 1/N do blast radius. Mencione o risco de dependências globais compartilhadas que furam o isolamento.",
+    "example": "O `msc-shard-router` é uma implementação direta: cada shard de backend é um bulkhead isolado, e o hashing consistente (SHA-512 + réplicas virtuais) garante que o pico de um `id_client` específico fique concentrado no shard dele em vez de vazar para a frota inteira (caso clássico de bulkhead por hashing consistente do workbook). O circuit breaker por shard reforça a contenção: a falha de um backend não propaga para os outros compartimentos.",
+    "diagrams": [
+      "shard-router-flow"
+    ],
+    "sourceRefs": [
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.558-575",
+        "note": "Bulkhead Pattern: engenharia naval, bulkheads lógicos vs físicos, tabela de blast radius 1/N, sharding funcional/operacional, arquiteturas por prioridade/criticidade/segmento/tenant, noisy neighbor"
+      },
+      {
+        "kind": "repo",
+        "source": "msc-shard-router",
+        "locator": "pkg/sharding/, pkg/hashring/",
+        "note": "shards isolados como bulkheads, roteamento por hashing consistente"
+      },
+      {
+        "kind": "reference",
+        "source": "microservices.io",
+        "locator": "patterns/reliability/bulkhead.html"
+      }
+    ]
+  },
+  {
+    "id": "cell-based",
+    "title": "Cell-Based Architecture (Arquitetura Celular)",
+    "category": "Resiliência",
+    "summary": "Evolução do Bulkhead: estrutura o sistema em células independentes e autocontidas (cada uma com sua app, dados, observabilidade e deploy), roteadas deterministicamente por chave estável, com replicação entre células para conter ainda mais o blast radius.",
+    "detailedExplanation": "A Arquitetura Celular modela o sistema como uma **rede de células independentes e autocontidas** — uma evolução do Bulkhead Pattern focada em *modelar domínios de falha*, não em particionamento horizontal sofisticado. Uma célula não é só um agrupamento técnico: é uma segmentação arquitetural explícita em **múltiplas dimensões simultâneas** — execução (capacidade e escalabilidade isoladas), persistência (databases próprios), observabilidade (métricas/logs/traces por célula), deploy (pipelines que atualizam células sem impacto global) e falha (blast radius mensurável). Compartilhar componentes globais (filas, tópicos, caches, DB) **invalida** o isolamento; se houver necessidade de algo central (gateway, tópico de domínio), ele precisa ser intermediado por componentes celulares de borda.\n\nEstruturalmente, cada célula agrupa um ou mais componentes (microsserviços, funções, DBs, gateways) desde o design até a implantação, atende uma parcela determinada do público de forma autocontida, e **toda comunicação externa passa obrigatoriamente por um gateway/proxy de borda**. Componentes internos só conhecem e conversam com a própria célula, nunca com outra; cada célula tem nome e versão únicos. O **isolamento de estado** é determinístico: células não compartilham estado primário, apenas por *replicação passiva* — cada célula tem seus próprios clusters de DB, cache, consumidores. Isso habilita estratégias por célula (tuning diferente, runtime diferente, rollout experimental em células-piloto sem afetar produção). O **roteamento** é o coração: toda requisição vai para uma célula específica por uma *chave estável* (`customerId`, `accountId`, `tenantId`), de forma determinística — o cliente que está na célula X hoje continua na X amanhã, independente de picos. A camada que intercepta e roteia chama-se **Edge Cell** (Célula de Borda): mais que um Nginx/Envoy, é uma aplicação inteligente, idealmente stateless, extremamente resiliente e *paradoxalmente* muito distribuída para não virar o novo SPOF. Mudar o número de células ou o hashing exige orquestração cuidadosa (risco de *rehash storm*). Há células síncronas (roteamento no caminho crítico — cada célula dimensionada como unidade autônoma de performance) e assíncronas (consumidor de borda republica eventos para tópicos segmentados da célula, eliminando backpressure global).\n\nO diferencial sobre bulkhead puro é a **replicação celular**: células passivas espelham os dados das ativas (assíncrona/eventual via streams de eventos, ou consistente via 2PC quando o domínio não tolera divergência). Em falha da célula ativa, o cliente é redirecionado para a passiva que tem seus dados, de forma transparente — uma *poison pill* fica contida na fronteira da célula. Combinada com **shuffle sharding** (cada cliente mapeado a um subconjunto estável de k células, não a uma só), a previsibilidade do impacto dá um salto: o blast radius deixa de ser 1/N e passa a ser a *probabilidade de o cliente estar em todo o conjunto de células que falhou simultaneamente*: `P(impacto) ≈ (f/N)^k`. Exemplo concreto: 20 células, 2 réplicas em shuffle, 2 células caídas → 1% de impacto — o mesmo que precisaria de **100 bulkheads** simples para alcançar.",
+    "relatedTopics": [
+      "bulkhead",
+      "sharding-partitioning",
+      "data-replication",
+      "resilience-patterns",
+      "spof-dr"
+    ],
+    "relatedPatterns": [
+      "cell-based-architecture",
+      "consistent-hashing",
+      "bulkhead",
+      "api-gateway"
+    ],
+    "tradeOffs": [
+      {
+        "dimension": "Blast radius",
+        "pro": "Com replicação + shuffle sharding, P(impacto)=(f/N)^k cai exponencialmente: 20 células/2 réplicas igualam 100 bulkheads simples",
+        "con": "Multiplica componentes (cada célula replica DB, cache, app, filas) — custo de infra e operação muito mais alto"
+      },
+      {
+        "dimension": "Roteamento determinístico",
+        "pro": "Cliente sempre na mesma célula → estado coeso, failover transparente para a passiva",
+        "con": "Mudar nº de células ou algoritmo de hashing pode causar rehash storm (remapeamento massivo); a Edge Cell vira candidata a novo SPOF se não for muito distribuída"
+      },
+      {
+        "dimension": "Replicação entre células",
+        "pro": "Assíncrona mantém baixa latência e isolamento; consistente (2PC) garante zero divergência no failover",
+        "con": "Assíncrona aceita consistência eventual no chaveamento; consistente reintroduz acoplamento temporal e latência entre células, ferindo o isolamento"
+      }
+    ],
+    "interviewAngle": "É o nível 'staff' da pergunta de isolamento. Mostre que você sabe que célula = bulkhead + autocontenção total (dados/observabilidade/deploy próprios) + replicação. O golpe de mestre é a fórmula P=(f/N)^k do shuffle sharding e o exemplo de 20 células/2 réplicas valendo 100 bulkheads. Aponte os dois riscos clássicos: rehash storm ao reescalar e a Edge Cell virando SPOF.",
+    "example": "O `msc-shard-router` é literalmente o artefato da pesquisa de mestrado em arquitetura celular do autor: atua como a Edge Cell, roteando por chave estável (`id_client`) via hashing consistente (SHA-512 + réplicas virtuais com `SHUFFLE_REPLICAS`) para a célula/shard determinístico, com lookup O(log n) por busca binária e estabilidade sob add/remove de shards — exatamente o mecanismo que evita o rehash storm descrito no workbook.",
+    "diagrams": [
+      "shard-router-flow",
+      "architecture-overview"
+    ],
+    "sourceRefs": [
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.576-590",
+        "note": "Cell-Based Pattern: unidades celulares, isolamento de estado, Edge Cells, células síncronas/assíncronas, replicação celular, shuffle sharding, P(impacto)=(f/N)^k"
+      },
+      {
+        "kind": "repo",
+        "source": "msc-shard-router",
+        "locator": "pkg/hashring/, pkg/sharding/",
+        "note": "Edge Cell / roteador celular com hashing consistente e réplicas virtuais (tese de mestrado em arquitetura celular)"
+      },
+      {
+        "kind": "reference",
+        "source": "microservices.io",
+        "locator": "patterns/data/consistent-hashing.html"
+      }
+    ]
+  },
+  {
+    "id": "deployment-strategies",
+    "title": "Estratégias de Deployment",
+    "category": "Entrega",
+    "summary": "Modelos para entregar novas versões com risco controlado — Big Bang, Rolling Update, Blue-Green, Canary, Shadow/Mirror, Feature Flags e Sharding Deployment — cada um equilibrando velocidade, segurança, custo e capacidade de rollback.",
+    "detailedExplanation": "Deployment é disponibilizar uma versão num ambiente, estruturado modernamente em CI (Continuous Integration) e CD (Continuous Delivery). Mais importante do que entregar rápido é conseguir **reverter rápido**: a maturidade de *rollback* é o que sustenta sistemas críticos e deve estar integrada a todo modelo. As estratégias existem para resolver problemas distintos de risco.\n\n**Big Bang / Recreate** recria tudo de forma abrupta e simultânea — só faz sentido quando não se pode conviver com duas versões ao mesmo tempo (troca de schema, mudança de contrato, ou consumidores Kafka onde a alternância de consumidores causa rebalanceamento custoso). É o último recurso: simples operacionalmente, mas com alto risco e downtime. **Rolling Update** é o mais comum: sobe novas réplicas e desliga as antigas gradualmente (uma a uma, duas a duas), mantendo o serviço no ar. O ponto fraco é que a única validação é o health check básico — não há controle fino de tráfego nem validação prévia da versão. **Blue-Green** busca *zero downtime* e rollback instantâneo: dois ambientes idênticos (Blue=estável em produção, Green=candidata), com warm-up, smoke tests e validações na Green antes de chavear o tráfego (via LB ou DNS) de uma vez; a Blue fica de prontidão para reverter. O desafio real não é o código, mas a **migração de schema** — se a mudança torna a Blue incompatível, o rollback fica caríssimo. **Canary** é progressivo: stable e canary coexistem, mas só uma pequena % do tráfego vai para a canary, aumentando gradualmente conforme métricas (latência, erro, métricas de produto) validam — idealmente com progressão e rollback automatizados por checagens.\n\nAs estratégias avançadas refinam ainda mais o risco. **Shadow Deployment / Mirror Traffic** duplica (não divide) uma % do tráfego real para uma versão de sombra que processa em paralelo mas **não retorna resposta ao cliente** — validação sem impacto, configurada em proxies/sidecars/service mesh; exige modo *dry-run* (ex.: `tx.Rollback()` quando `ENVIRONMENT==shadow`) e idempotência para não duplicar escritas; serve de passo anterior a Canary/Blue-Green. **Feature Flags / Toggles** desacoplam *deploy* de *release*: a funcionalidade vai a produção com a flag desligada e é ativada dinamicamente por segmento de cliente, sem novo deploy — habilita experimentação controlada e empodera produto/negócio. Técnicas de *clustering* (k-means sobre segmento/volume/região) ajudam a agrupar clientes parecidos para flags/sharding mais inteligentes. **Sharding Deployment** aplica os mesmos princípios de partição: direciona versões novas a shards menos prioritários/piloto, comum em multi-tenant — poderoso para conter falhas, mas caro pois replica infraestrutura.",
+    "relatedTopics": [
+      "resilience-patterns",
+      "spof-dr",
+      "load-stress-testing",
+      "sharding-partitioning",
+      "cell-based"
+    ],
+    "relatedPatterns": [
+      "health-check-api",
+      "circuit-breaker",
+      "cell-based-architecture"
+    ],
+    "tradeOffs": [
+      {
+        "dimension": "Rolling Update",
+        "pro": "Simples, sem downtime, é o default da maioria dos orquestradores",
+        "con": "Sem validação intermediária além do health check nem controle fino de tráfego — uma versão ruim chega a todos os clientes progressivamente sem gate"
+      },
+      {
+        "dimension": "Blue-Green",
+        "pro": "Zero downtime e rollback quase instantâneo (rechavear para a Blue)",
+        "con": "Custo de manter dois ambientes idênticos; migração/rollback de schema é a parte mais complexa e cara"
+      },
+      {
+        "dimension": "Canary",
+        "pro": "Limita a exposição da versão nova a uma fração do tráfego, com rollback automatizável por métricas",
+        "con": "Progressão lenta (pode levar semanas), exige observabilidade e automação maduras para decidir promover/reverter"
+      },
+      {
+        "dimension": "Shadow / Mirror",
+        "pro": "Valida a versão nova com tráfego real sem nenhum impacto no usuário",
+        "con": "Só seguro sem efeitos colaterais — exige dry-run e idempotência para não duplicar escritas; não testa a resposta ao cliente"
+      }
+    ],
+    "interviewAngle": "Aparece em 'como você faz deploy seguro de um serviço crítico?'. A resposta forte encadeia: shadow/mirror para pré-validar → canary com gates por métrica → rollback automatizado; e separa deploy de release com feature flags. O ponto que diferencia sênior: lembrar que o gargalo real do rollback é a migração de schema, não o código (expand/contract).",
+    "example": "O `msc-transactions-api` materializa o shadow deployment no código: o `ENV=shadow` faz a transação rodar em dry-run com `tx.Rollback()` em vez de `tx.Commit()`, exatamente o padrão do workbook para mirror traffic sem duplicar registros financeiros. A segmentação de clientes (PF/PJ, varejo/agro) que o workbook usa como exemplo de feature flag espelha o particionamento por chave que o shard-router já faz para sharding deployment.",
+    "diagrams": [
+      "transactional-api-flow"
+    ],
+    "sourceRefs": [
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.591-608",
+        "note": "Estratégias de Deployment: Big Bang, Rolling, Blue-Green, Canary, schema migrations, Shadow/Mirror, Feature Flags, clustering k-means, Sharding Deployment"
+      },
+      {
+        "kind": "repo",
+        "source": "msc-transactions-api",
+        "locator": "services/, ENV=shadow",
+        "note": "modo shadow com rollback em dry-run para mirror traffic"
+      },
+      {
+        "kind": "reference",
+        "source": "microservices.io",
+        "locator": "patterns/deployment/multiple-services-per-host.html"
+      }
+    ]
+  },
+  {
+    "id": "capacity-queueing",
+    "title": "Capacity Planning e Teoria das Filas",
+    "category": "Escalabilidade",
+    "summary": "Modelagem matemática de carga e saturação. Usa Teoria das Filas (λ vs μ), Lei de Little (L = λ × W) e a Curva do Joelho para entender limites estruturais, dimensionar concorrência e planejar crescimento antes que vire incidente.",
+    "detailedExplanation": "Capacity planning não é prever o futuro com precisão, é **entender os limites estruturais do sistema antes que virem incidente**. A maioria dos problemas de capacidade não vem de crescimento repentino, mas da incapacidade de interpretar o comportamento sob carga real — métricas isoladas (CPU média, TPS médio) raramente contam a história completa; o que importa é como os sinais se relacionam e onde os gargalos se formam quando a carga deixa de ser uniforme.\n\nA **Teoria das Filas** estuda como sistemas se comportam quando demandas competem por recursos finitos. Toda fila é um mecanismo onde solicitações chegam a uma taxa **λ (lambda)** e são processadas a uma taxa **μ (mu)**, oscilando entre ociosidade, equilíbrio e saturação. Quando λ se aproxima ou ultrapassa μ, forma-se um gargalo físico: o tempo de resposta sobe e o throughput degrada. O insight não-óbvio é que \"filas\" não existem só em brokers — cada hop, pool de threads, conexão de DB, lock e mecanismo de retry se comporta como uma fila independente. Por isso um microsserviço saudável em p95 degrada em p99 sob picos *mesmo com CPU estável*: o problema não é falta de capacidade física, é **variabilidade temporal e bursts**. Um sistema não sofre por receber \"muitas requisições\", mas por recebê-las de forma *imprevisível/não-uniforme* — daí a teoria sugerir métricas de variabilidade (coeficiente de variação, desvio padrão) e explicar por que autoscaling não resolve tudo (ele reage a gatilhos temporais, sensível a bursts).\n\nA **Lei de Little** (`L = λ × W`) é o princípio central: relaciona o número médio de itens em processamento (**L**), a taxa de chegada (**λ**) e o tempo médio de permanência (**W**). É válida para qualquer sistema estável, sem depender de estatística complexa. Exemplo: 1500 msg/s × 50ms = **75** mensagens concorrentes em voo; se W subir para 85ms, L salta para 127 — um aumento pequeno em W infla desproporcionalmente a concorrência interna. Isso vira ferramenta de dimensionamento: define-se um **L(Alvo)** como Service Level de engenharia (quanto menor L, melhor) e busca-se reduzir W via otimização. Se uma API com L(Alvo)=150 recebe 500 req/s a 300ms (`L=150`, ponto saudável) e a carga dobra para 1000 req/s, L vai a 300 — saturação; para voltar ao alvo, `W = L(Alvo)/λ × 1000 = 150ms`, ou seja, é preciso cortar o tempo pela metade. A **Curva do Joelho (Knee Curve)** mostra o ponto onde a latência deixa de crescer linearmente e passa a crescer de forma não-linear/exponencial: antes do joelho está o **Ponto Saudável** (equilíbrio entre eficiência e previsibilidade) e o **Ponto Máximo de Utilização** (limite teórico, alto risco). Crucial: não é preciso 100% de CPU para inflar filas — por volta de **80-85% de utilização**, incrementos marginais já produzem aumentos desproporcionais de latência. A **modelagem de carga** combina três métricas (TPS, processos concorrentes e payload médio) para uma visão realista, e o planejamento deriva o throughput sistêmico pela lógica do **menor gargalo** (a capacidade real emerge do encadeamento de serviços, não da análise isolada), tratando capacidade como *orçamento* (custo de over- vs under-provisioning), não só como limite técnico.",
+    "relatedTopics": [
+      "performance-scalability",
+      "load-stress-testing",
+      "observability",
+      "bulkhead",
+      "resilience-patterns"
+    ],
+    "relatedPatterns": [
+      "bulkhead",
+      "application-metrics"
+    ],
+    "tradeOffs": [
+      {
+        "dimension": "Autoscaling",
+        "pro": "Aumenta μ (taxa de processamento) sob demanda adicionando réplicas",
+        "con": "Reage a gatilhos temporais de saturação — fica sensível a bursts/picos súbitos, não resolve variabilidade nem o custo de espera entre hops"
+      },
+      {
+        "dimension": "Margem de utilização",
+        "pro": "Operar no Ponto Saudável (pré-joelho) absorve spikes/jitter sem inflar filas internas",
+        "con": "Significa deixar capacidade ociosa (não maximizar uso); rodar perto de 85% de CPU já dispara latência não-linear"
+      },
+      {
+        "dimension": "Lei de Little como modelo",
+        "pro": "Simples (L=λ×W), válida para qualquer sistema estável, dispensa estatística pesada e guia dimensionamento de threads/consumers/partições",
+        "con": "Vale para médias em regime estável; não captura bursts intra-segundo nem variância — precisa ser complementada com modelagem de variabilidade"
+      }
+    ],
+    "interviewAngle": "Sobe a régua de qualquer pergunta de escala: em vez de 'adiciono mais réplicas', mostre que você modela com Lei de Little (L=λ×W) para dimensionar concorrência e com a Curva do Joelho para saber que o sistema degrada antes dos 100% de CPU (~80-85%). Saber dizer 'aumento pequeno em W explode L e a fila' e 'o gargalo sistêmico é o menor gargalo da cadeia' demonstra raciocínio quantitativo, não chute.",
+    "example": "Para o `msc-transactions-api` processando débito/crédito: se ele recebe λ=500 transações/s com W=300ms (consulta de saldo no Postgres + validação de limite), a Lei de Little prevê L=150 transações concorrentes em voo — número que dimensiona o connection pool e os workers. Se o lock contention no saldo elevar W para 400ms, L salta para 200 e o pool satura; o cache Redis existe justamente para baixar W e manter o sistema no ponto saudável, antes da curva do joelho.",
+    "diagrams": [
+      "transactional-api-flow"
+    ],
+    "sourceRefs": [
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.609-638",
+        "note": "Capacity Planning e Teoria das Filas: λ/μ, Lei de Little L=λ×W, ponto saudável, Knee Curve, margens de saturação 80-85%, modelagem de carga (TPS/concorrência/payload), menor gargalo"
+      },
+      {
+        "kind": "repo",
+        "source": "msc-transactions-api",
+        "locator": "services/, pkg/",
+        "note": "pool de conexões e cache Redis como controles de W/L sob carga transacional"
+      },
+      {
+        "kind": "reference",
+        "source": "microservices.io",
+        "locator": "patterns/observability/application-metrics.html"
+      }
+    ]
+  },
+  {
+    "id": "load-stress-testing",
+    "title": "Testes de Carga e Estresse",
+    "category": "Entrega",
+    "summary": "Disciplina de submeter o sistema a cargas controladas (esperadas ou extremas) para responder perguntas-chave sobre capacidade, gargalos e resiliência — via smoke, average load, stress, spike e breakpoint — guiada por jornadas reais de uso e Service Levels.",
+    "detailedExplanation": "Testes de performance existem para dar uma **garantia pragmática** de que os requisitos de uso serão entregues, transformando insumos de capacidade de uma reação em crise para uma prática preventiva. O princípio que muda tudo: testar não é só \"injetar carga\", é **responder perguntas específicas** sobre o sistema — injetar carga sem antes definir o que se quer descobrir gera resultados dispersos e de pouco valor. A fase de planejamento é mais demorada que a execução, e é onde está o valor. O ponto de partida é conhecer o **comportamento e a jornada do cliente**: um relatório de fechamento de caixa é caro mas raro (testa-se em *estresse*), enquanto registrar vendas é frequente mas barato (testa-se em *escala/carga*) — não faz sentido inverter. Modelar jornadas realistas (ex.: e-commerce com login uma vez, busca muitas vezes; ou pagamentos com 50% cartão / 30% PIX / 15% boleto / 5% estorno) produz testes que refletem o sistema real.\n\nOs **tipos de teste** respondem perguntas distintas. **Smoke test**: carga mínima para validar que as funções principais funcionam e que a aplicação está \"pronta para ser testada\" — roda em CI/CD, não analisa desempenho a fundo. **Average Load**: roda a carga *esperada* por períodos longos (dias/semanas) para verificar se a performance se sustenta e caçar problemas como *memory leaks* e outliers. **Stress test**: condições *extremas* acima do normal para encontrar gargalos e limites de resiliência, observando CPU, memória, rede, I/O e pools até o ponto de saturação. **Spike test**: pico súbito seguido de queda rápida, para validar estabilidade sob aumentos repentinos e ajustar a arquitetura para absorvê-los *sem* superdimensionar. **Breakpoint test**: tráfego progressivo e controlado até encontrar o **ponto exato de quebra** — onde latência dispara, erros sobem e a cascata de falhas começa, revelando qual componente falha primeiro e os limites da política de autoscaling.\n\nO roteiro responde **perguntas-chave**: qual o tráfego atual (usuários simultâneos, TPS, picos)? Quais os objetivos de tempo de resposta, taxa de erro e saturação — medidos *por jornada*, não como caixa-preta de média única? Qual o tráfego em pico (delivery tem picos de almoço/jantar)? Quais protocolos a aplicação expõe (HTTP, gRPC, WebSocket, Kafka, AMQP, MQTT) — para que o teste replique as mesmas vias reais? Qual a projeção de crescimento? Há ainda **pré-testes** valiosos: validar a capacidade de **uma única réplica** isoladamente antes de escalar (ex.: descobrir que cada réplica aguenta 10 TPS sem ferir o SLA, depois somar 2, 3 réplicas para provar linearidade e calibrar autoscaling), até o ponto em que o poder computacional deixa de ser o gargalo e a próxima dependência assume. Boa prática operacional: aproveitar o esforço do teste para montar dashboards e alertas (*Single Pane of Glass*) que servem também à operação diária, e transformar os limites descobertos em **Service Levels oficiais** (ex.: checkout >99,99% e <3s viram o SLA).",
+    "relatedTopics": [
+      "capacity-queueing",
+      "performance-scalability",
+      "observability",
+      "resilience-patterns",
+      "deployment-strategies"
+    ],
+    "relatedPatterns": [
+      "health-check-api",
+      "application-metrics"
+    ],
+    "tradeOffs": [
+      {
+        "dimension": "Carga vs Estresse",
+        "pro": "Teste de carga garante as baselines contratadas (TPS/latência esperados); teste de estresse revela gargalos e limites antes de o cliente sofrer",
+        "con": "São objetivos diferentes — aplicar o teste errado à funcionalidade errada (estressar relatório raro, escalar carga de venda) gera resultado inútil"
+      },
+      {
+        "dimension": "Teste em produção (fase Run)",
+        "pro": "Cenários realistas em pré-prod/prod expõem comportamento verdadeiro que ambientes sintéticos escondem",
+        "con": "Pode concorrer com o cliente final e causar impacto real se mal isolado; exige cuidado e mecanismos de contenção"
+      },
+      {
+        "dimension": "Planejamento de jornada",
+        "pro": "Testes baseados em jornada real (porcentagens de uso) refletem o sistema de verdade e geram insight acionável",
+        "con": "Modelagem demorada e dependente de conhecer bem o comportamento do cliente; mal feita, vira carga sintética sem valor"
+      }
+    ],
+    "interviewAngle": "Surge em 'como você valida que o sistema aguenta?'. Não responda 'rodo um teste de carga' — diferencie os tipos (breakpoint acha o ponto de quebra, spike testa pico súbito, average load caça memory leak) e amarre cada um a uma pergunta. Ganha pontos quem cita o pré-teste de réplica única (descobrir TPS/réplica para calibrar autoscaling) e transformar os limites achados em SLAs oficiais.",
+    "example": "Para o `msc-transactions-api`, um breakpoint test progressivo (como o relatório do workbook: de 0 a 10000 usuários, +10/min) acharia o joelho — digamos, ~1300 usuários onde p95 chega a 800ms — provando onde o Postgres começa a travar e validando se a política de scaling reage a tempo. O pré-teste de réplica única estabeleceria o TPS sustentável por instância antes de escalar; e o smoke test do mesmo serviço entraria no pipeline CI/CD do repo como gate de qualidade por release.",
+    "diagrams": [
+      "transactional-api-flow"
+    ],
+    "sourceRefs": [
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.639-666",
+        "note": "Testes de Carga e Estresse: build vs run, smoke/average load/stress/spike/breakpoint, perguntas-chave, jornadas, pré-teste de réplica única, Service Levels como gate, relatório de teste"
+      },
+      {
+        "kind": "repo",
+        "source": "msc-transactions-api",
+        "locator": "services/, routes/",
+        "note": "alvo realista de teste de carga transacional (débito/crédito) com dependências Postgres/Redis"
+      },
+      {
+        "kind": "reference",
+        "source": "microservices.io",
+        "locator": "patterns/observability/health-check-api.html"
+      }
+    ]
+  },
+  {
+    "id": "spof-dr",
+    "title": "Single Point of Failure e Disaster Recovery",
+    "category": "Resiliência",
+    "summary": "SPoF é qualquer componente centralizado cuja falha derruba (total ou parcialmente) o sistema; DR é o conjunto de estratégias e métricas (MTTD, MTTR, MTBF, RTO, RPO) para sobreviver e recuperar de eventos de grande escala como queda de região ou cloud.",
+    "detailedExplanation": "Um **Single Point of Failure (SPoF)** é qualquer componente, serviço ou recurso *centralizado* cuja falha provoca indisponibilidade total ou parcial — um DB, um load balancer, um API Gateway, um broker ou até um microsserviço sem caminho alternativo. A analogia: uma cidade com uma única ponte; mesmo com barco/helicóptero, nem todos passam. São raros os sistemas *sem* SPoF; quanto maior a responsabilidade de um componente, maior o impacto da sua queda na ausência de fallbacks. **Identificá-los** não é trivial em larga escala: exige mapear as funcionalidades críticas, desenhar o \"fluxo feliz\" de cada transação ponta-a-ponta com todos os atores, e inspecionar quais componentes *não* têm réplicas, padrões de resiliência ou fallbacks automáticos — esses são os candidatos. É trabalho de revisão arquitetural contínua, não pontual.\n\n**Lidar com SPoFs não é duplicar tudo indiscriminadamente** — o objetivo é reduzir o blast radius, aumentar a previsibilidade sob falha e diminuir o tempo de recuperação, sempre com trade-off entre custo, complexidade, latência e consistência. A eliminação *completa* é praticamente impossível e nem sempre vale: às vezes aceitar uma falha momentânea custa menos que manter redundância global. As estratégias incluem: **design stateless** (externalizar estado para camadas distribuídas, permitindo que qualquer instância processe qualquer request — mas isso desloca o risco para a camada de persistência); **replicação ativa** (todas as réplicas processam carga simultaneamente atrás de um LB ou consumindo filas — dilui o impacto da queda de algumas, exige sincronização consistente); **replicação passiva** (uma primária ativa, outra em standby aguardando falha — mais simples, mas cria dependência crítica na *detecção* e *promoção*; se forem lentas/manuais, o downtime é grande); e **failover automático** (monitoramento confiável + critérios claros + redirecionamento transparente, usando circuit breakers/feature toggles para chavear fluxos).\n\n**Disaster Recovery** opera num nível acima: não trata falhas locais corriqueiras, mas **eventos de grande escala** — queda de cloud provider, incidente climático, incêndio, corrupção massiva, ataque cibernético — que comprometem um datacenter, região inteira ou múltiplos serviços. Enquanto a mitigação de SPoF age em nível de *componente*, DR age em nível de *produto*, com escopo regional. Os modos: **ativo-ativo** (múltiplas regiões recebem tráfego — máxima disponibilidade, mas dispara complexidade de consistência distribuída, exigindo resolução de conflito como LWW ou CRDTs); **ativo-passivo** (primária processa, secundária pronta para assumir — equilíbrio custo/resiliência, comum em ambientes regulados, com possível consistência eventual no chaveamento); e **pilot light** (só os componentes essenciais ativos na região secundária, ex.: DB replicando; o resto é provisionado sob demanda no desastre — barato mas com RTO maior, dependente de automação e testado por simulação). As **métricas** governam tudo quantitativamente e são interligadas: **MTTD** (Mean Time to Detect, ligado a observabilidade — MTTD alto = cego em pontos importantes), **MTTR** (Mean Time to Repair — ligado a runbooks, automação, self-healing, rollback), **MTBF** (Mean Time Between Failures — confiabilidade; quanto maior, mais estável), **RTO** (Recovery Time Objective — tempo máximo aceitável de indisponibilidade pós-falha; contratual; RTO=0 é caríssimo) e **RPO** (Recovery Point Objective — perda máxima aceitável de dados; ligado à frequência de backup e lag de replicação; RPO≈0 exige replicação síncrona). RTO e RPO são contratuais e guiam o nível de investimento: banco transacional pede RTO de 1h e RPO de minutos; blog pessoal tolera RTO de 48h.",
+    "relatedTopics": [
+      "resilience-patterns",
+      "bulkhead",
+      "cell-based",
+      "data-replication",
+      "observability"
+    ],
+    "relatedPatterns": [
+      "circuit-breaker",
+      "health-check-api",
+      "cell-based-architecture"
+    ],
+    "tradeOffs": [
+      {
+        "dimension": "Ativo-Ativo vs Ativo-Passivo (DR)",
+        "pro": "Ativo-ativo eleva a disponibilidade global e distribui o risco; tráfego em múltiplas regiões simultâneas",
+        "con": "Ativo-ativo amplia drasticamente a complexidade de consistência (multi-master, conflito, CRDTs/LWW); ativo-passivo é mais simples mas aceita consistência eventual no failover"
+      },
+      {
+        "dimension": "Pilot Light",
+        "pro": "Custo operacional baixo — só o essencial fica quente na região secundária",
+        "con": "RTO maior (precisa provisionar e escalar a infra no desastre) e altíssima dependência de automação testada por simulação"
+      },
+      {
+        "dimension": "RTO/RPO baixos",
+        "pro": "Recuperação quase instantânea e perda de dados mínima — exigência de sistemas financeiros/hospitalares",
+        "con": "Custo e complexidade crescem muito (replicação síncrona, multi-região); RTO/RPO=0 é raramente justificável fora de domínios críticos"
+      }
+    ],
+    "interviewAngle": "Pergunta clássica de fechamento: 'onde estão os SPoFs do seu desenho e o que acontece se a região AWS cair?'. Mostre o método (mapear fluxo feliz → achar componentes sem réplica/fallback) e separe SPoF (componente) de DR (produto/região). O diferencial é dominar as 5 métricas: amarre MTTD a observabilidade, MTTR a runbooks/automação, e RTO/RPO ao custo — e saiba que RTO/RPO=0 quase nunca compensa.",
+    "example": "No `event-source-distributed-ledger`, o Event Store Postgres é o SPoF mais crítico (golden source); a mitigação natural é réplica promovível (replicação ativa) e, para DR regional, ativo-passivo com replicação contínua. O RPO é definido pelo lag de replicação do Event Store; o RTO, pelo tempo de promoção da réplica. Como os Read Models (ScyllaDB/Mongo) são derivados e descartáveis, em desastre eles podem ser reconstruídos via replay dos eventos — reduzindo a dependência de backup deles e melhorando o RPO efetivo do sistema.",
+    "diagrams": [
+      "event-sourced-ledger-flow",
+      "architecture-overview"
+    ],
+    "sourceRefs": [
+      {
+        "kind": "pdf",
+        "source": "System Design Workbook",
+        "locator": "p.667-682",
+        "note": "SPoF e Disaster Recovery: identificação, stateless, replicação ativa/passiva, failover automático, DR ativo-ativo/ativo-passivo/pilot light, métricas MTTD/MTTR/MTBF/RTO/RPO"
+      },
+      {
+        "kind": "repo",
+        "source": "event-source-distributed-ledger",
+        "locator": "ledger/, balance/, statement/",
+        "note": "Event Store como SPoF/golden source; Read Models derivados reconstruíveis por replay melhoram RPO"
+      },
+      {
+        "kind": "reference",
+        "source": "microservices.io",
+        "locator": "patterns/reliability/circuit-breaker.html"
+      }
+    ]
+  }
+]
