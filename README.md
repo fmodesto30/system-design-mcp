@@ -160,8 +160,16 @@ Busca full-text · export do guia em PDF · um modo “quiz” cronometrado · d
 adicionais por fluxo · CI rodando os testes de integridade. Ver
 [`docs/final-report.md`](docs/final-report.md).
 
-## Licença / uso
+## Contribuindo
 
-Projeto de estudo. O texto do workbook e o código dos repositórios pertencem aos seus
-autores; aqui há apenas referências e explicações com palavras próprias. Não
-redistribui o PDF nem o código de terceiros.
+Veja [`CONTRIBUTING.md`](CONTRIBUTING.md) — setup, fluxo de git (GitHub Flow), Conventional
+Commits e a **regra de ouro**: todo item de conteúdo precisa de fonte verificada (o
+`KnowledgeBaseIntegrityTest` falha o build se faltar). Também:
+[`SECURITY.md`](SECURITY.md) · [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) ·
+[`CHANGELOG.md`](CHANGELOG.md).
+
+## Licença
+
+Código sob **[MIT](LICENSE)**. O conteúdo (`knowledge-base/`, `docs/`) é escrito com palavras
+próprias e **cita** terceiros — *System Design Workbook* (M. S. Fidelis), os repos `msfidelis` e
+microservices.io — que continuam de seus autores. **Não** redistribui o PDF nem código de terceiros.
