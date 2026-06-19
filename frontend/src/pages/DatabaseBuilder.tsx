@@ -123,6 +123,9 @@ export function DatabaseBuilder() {
   const ranked = [...SCORER].sort((a, b) => scores[b] - scores[a]);
   const winner = ranked[0];
   const max = Math.max(1, scores[winner]);
+  // Banco a destacar nas barras: a sugestão semeada (RDS MySQL pontua via RDS PostgreSQL).
+  const seedHighlight: DbId | null =
+    seed && SCORER.includes(seed as DbId) ? (seed as DbId) : seed === "rds-mysql" ? "rds-postgresql" : null;
 
   const set = <K extends keyof Sel>(k: K, v: Sel[K]) => setSel((p) => ({ ...p, [k]: v }));
 
@@ -134,7 +137,9 @@ export function DatabaseBuilder() {
         vivo. É um mapa de decisão, não uma regra: brinque com os trade-offs.
         {seed && SEED[seed] ? (
           <>
-            {" "}Pré-carregado a partir da sugestão de <strong>{DB_NAMES[seed] ?? seed}</strong>.
+            {" "}Perfil pré-carregado a partir da sugestão de <strong>{DB_NAMES[seed] ?? seed}</strong> —
+            ajuste as perguntas; o placar reavalia ao vivo e pode discordar da sugestão.
+            {seed === "rds-mysql" ? " (RDS MySQL pontua na linha relacional, via RDS PostgreSQL.)" : ""}
           </>
         ) : null}
       </p>
@@ -192,9 +197,10 @@ export function DatabaseBuilder() {
           </div>
           <div className="builder-bars">
             {ranked.map((id) => (
-              <div key={id} className="bar-row">
+              <div key={id} className={`bar-row${id === seedHighlight ? " seeded" : ""}`}>
                 <Link className="bar-label" to={`/databases/${id}`}>
                   {DB_NAMES[id]}
+                  {id === seedHighlight ? " ◂ sugerido" : ""}
                 </Link>
                 <div className="bar-track">
                   <div

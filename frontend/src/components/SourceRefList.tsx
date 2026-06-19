@@ -18,12 +18,16 @@ export function SourceRefList({ refs }: { refs: SourceRef[] }) {
   const external = refs.filter((r) => r.url);
   return (
     <div className="sourcerefs">
-      <span className="sourcerefs-label">Fontes:</span>
-      {inline.map((ref, i) => (
-        <span key={i} className={`chip src-${ref.kind}`} title={ref.note ?? undefined}>
-          {label(ref)}
-        </span>
-      ))}
+      {inline.length > 0 && (
+        <>
+          <span className="sourcerefs-label">Fontes:</span>
+          {inline.map((ref, i) => (
+            <span key={i} className={`chip src-${ref.kind}`} title={ref.note ?? undefined}>
+              {label(ref)}
+            </span>
+          ))}
+        </>
+      )}
       {external.length > 0 && (
         <details className="sourcerefs-ext">
           <summary>Referências externas ({external.length})</summary>

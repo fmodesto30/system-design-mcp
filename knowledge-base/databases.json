@@ -22,7 +22,7 @@
     ],
     "tradeOffs": [
       { "dimension": "Consistência", "pro": "Forte (ACID); 6 cópias em 3 AZs com failover <30s.", "con": "Coordenação cobra latência e limita a escala de escrita a 1 writer." },
-      { "dimension": "Custo", "pro": "$539/mês — ~38% mais barato que RDS PostgreSQL 3 AZs.", "con": "Custo fixo provisionado mesmo com a instância ociosa." },
+      { "dimension": "Custo", "pro": "$539/mês — ~38% mais barato que o RDS PostgreSQL Multi-AZ (2 AZ).", "con": "Custo fixo provisionado mesmo com a instância ociosa." },
       { "dimension": "Escala", "pro": "Até 15 read replicas e storage auto até 128 TB.", "con": "Escrita não escala horizontalmente (single writer)." }
     ],
     "relatedPatterns": ["event-sourcing", "cqrs", "database-per-service"],
@@ -86,7 +86,7 @@
       "Indexação rica (B-Tree, BRIN, GiST) e SQL completo."
     ],
     "whenToAvoid": [
-      "Requisito de 3 AZs com menor custo (Aurora é ~38% mais barato).",
+      "Requisito de 3 AZs com menor custo (Aurora inclui 3 AZs e sai mais barato).",
       "Failover sub-30s crítico (Multi-AZ leva 60–120s)."
     ],
     "tradeOffs": [
@@ -157,7 +157,7 @@
     ],
     "whenToAvoid": [
       "Consultas ad-hoc, JOINs e relatórios relacionais.",
-      "Transações multi-item amplas (limite de 25 itens por transação)."
+      "Transações multi-item amplas (limite de 100 itens / 4 MB por transação)."
     ],
     "tradeOffs": [
       { "dimension": "Latência", "pro": "<10ms p99 e escala horizontal praticamente infinita.", "con": "Sem JOINs; exige modelagem por access pattern (single-table)." },

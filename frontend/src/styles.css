@@ -224,6 +224,7 @@ ol.steps .note { color: var(--muted); }
 .builder-bars { display: flex; flex-direction: column; gap: 8px; }
 .bar-row { display: grid; grid-template-columns: 130px 1fr 26px; gap: 8px; align-items: center; font-size: 13px; }
 .bar-label { color: var(--text); }
+.bar-row.seeded .bar-label { color: var(--accent-2); font-weight: 700; }
 .bar-track { background: var(--bg-elev2); border-radius: 99px; height: 10px; overflow: hidden; }
 .bar-fill { height: 100%; border-radius: 99px; transition: width 220ms; }
 .bar-score { text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
