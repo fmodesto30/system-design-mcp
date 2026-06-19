@@ -169,6 +169,7 @@
   },
   {
     "id": "cap-acid-base",
+    "databaseRecommendation": {"suggestedDbId": "aurora-postgresql", "level": "high", "rationale": "CP/ACID: toda leitura vê a última escrita (vs DynamoDB AP/BASE)."},
     "title": "Teorema CAP, ACID e BASE",
     "category": "Dados",
     "summary": "CAP (Brewer, 2000) afirma que um banco distribuído só entrega 2 de 3 entre Consistência, Disponibilidade e Tolerância a Partições; ACID (transacional, SQL) e BASE (flexível, NoSQL) são os dois modelos de garantia que ancoram essa escolha — e o próprio Brewer relativizou o 'escolha 2' em 2012.",
@@ -248,6 +249,7 @@
   },
   {
     "id": "pacelc",
+    "databaseRecommendation": {"suggestedDbId": "aurora-postgresql", "level": "high", "rationale": "PC/EC: prioriza consistência dentro e fora de partição."},
     "title": "Teorema PACELC",
     "category": "Dados",
     "summary": "Extensão do CAP (Abadi, 2010): se há Partição (P) escolhe-se entre Disponibilidade (A) e Consistência (C); senão (Else) escolhe-se entre Latência (L) e Consistência (C). Cobre a lacuna do CAP sobre como o sistema se comporta quando NÃO há falha de rede.",
@@ -318,6 +320,7 @@
   },
   {
     "id": "databases-indexing",
+    "databaseRecommendation": {"suggestedDbId": "rds-postgresql", "level": "medium", "rationale": "Indexação rica B-Tree/BRIN/GiST no PostgreSQL."},
     "title": "Databases, Modelos de Dados e Indexação",
     "category": "Dados",
     "summary": "Tipos de banco (SQL, NoSQL, NewSQL, in-memory, time-series, grafos), níveis de consistência (forte vs eventual) e estruturas de armazenamento e indexação (page size, colunar, LSM-Tree, B-Tree, hashing, índices invertidos) — escolhidos como um 'racional de features' por cenário (transacional, write-intensive, read-intensive).",
@@ -474,6 +477,7 @@
   },
   {
     "id": "microservices-monoliths",
+    "databaseRecommendation": {"suggestedDbId": "aurora-postgresql", "level": "medium", "rationale": "Database-per-service: 3 AZs inclusas por serviço, custo previsível."},
     "title": "Microsserviços, Monolitos e Domínios",
     "category": "Escalabilidade",
     "summary": "Monolito = unidade única indivisível (simples, consistência fácil, mas escala e tolerância a falhas limitadas); microsserviços = serviços pequenos independentes que se comunicam por rede (escala e blast radius isolados, mas complexidade distribuída). DDD define limites de contexto e a Lei de Conway explica como a estrutura organizacional molda a arquitetura.",
@@ -1083,6 +1087,7 @@
   },
   {
     "id": "sharding-partitioning",
+    "databaseRecommendation": {"suggestedDbId": "dynamodb", "level": "high", "rationale": "Particionamento nativo por partition key, sem sharding na aplicação."},
     "title": "Sharding e Particionamento",
     "category": "Escalabilidade",
     "summary": "Dividir grandes conjuntos de dados em partes menores (shards) distribuídas entre nós. A escolha da sharding key (alta cardinalidade) é o passo decisivo; má distribuição gera hot partitions. Hashing simples quebra ao mudar nós — daí o hashing consistente.",
@@ -1152,6 +1157,7 @@
   },
   {
     "id": "data-replication",
+    "databaseRecommendation": {"suggestedDbId": "rds-postgresql", "level": "medium", "rationale": "Replicação leader-follower clássica com read replicas."},
     "title": "Replicação de Dados",
     "category": "Dados",
     "summary": "Manter cópias do mesmo dado em locais distintos para disponibilidade, durabilidade e performance. Modelos primary-replica vs multi-master; estratégias síncrona/assíncrona/semi-síncrona; e padrões como replicação por logs, CDC, Event-Carried State Transfer e CRDTs.",

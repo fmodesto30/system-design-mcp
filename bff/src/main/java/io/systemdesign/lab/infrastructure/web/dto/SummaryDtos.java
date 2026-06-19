@@ -1,5 +1,6 @@
 package io.systemdesign.lab.infrastructure.web.dto;
 
+import io.systemdesign.lab.domain.model.Database;
 import io.systemdesign.lab.domain.model.Diagram;
 import io.systemdesign.lab.domain.model.Flow;
 import io.systemdesign.lab.domain.model.InterviewQuestion;
@@ -42,6 +43,14 @@ public final class SummaryDtos {
     public record DiagramSummary(String id, String title, String description) {
         public static DiagramSummary from(Diagram d) {
             return new DiagramSummary(d.id(), d.title(), d.description());
+        }
+    }
+
+    public record DatabaseSummary(String id, String name, String category, String engine,
+                                  String summary, String priceMonthly, String capTheorem) {
+        public static DatabaseSummary from(Database d) {
+            return new DatabaseSummary(d.id(), d.name(), d.category(), d.engine(),
+                    d.summary(), d.priceMonthly(), d.capTheorem());
         }
     }
 }

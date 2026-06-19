@@ -1,5 +1,6 @@
 package io.systemdesign.lab.application;
 
+import io.systemdesign.lab.domain.model.Database;
 import io.systemdesign.lab.domain.model.Diagram;
 import io.systemdesign.lab.domain.model.Evidence;
 import io.systemdesign.lab.domain.model.Flow;
@@ -77,6 +78,15 @@ public class KnowledgeService {
         return knowledgeBase.evidence();
     }
 
+    // ---- Databases ----
+    public List<Database> listDatabases() {
+        return knowledgeBase.databases();
+    }
+
+    public Database getDatabase(String id) {
+        return findById(knowledgeBase.databases(), Database::id, id, "Database");
+    }
+
     // ---- AI & Agents glossary (separate track) ----
     public List<GlossaryEntry> listAiGlossary() {
         return knowledgeBase.aiGlossary();
@@ -91,7 +101,8 @@ public class KnowledgeService {
                 knowledgeBase.interviewQuestions().size(),
                 knowledgeBase.diagrams().size(),
                 knowledgeBase.evidence().size(),
-                knowledgeBase.aiGlossary().size());
+                knowledgeBase.aiGlossary().size(),
+                knowledgeBase.databases().size());
     }
 
     private static <T> T findById(List<T> items, Function<T, String> idOf, String id, String type) {
@@ -101,6 +112,6 @@ public class KnowledgeService {
 
     /** Aggregate counts of the knowledge base. */
     public record KnowledgeStats(int topics, int patterns, int flows, int interviewQuestions,
-                                 int diagrams, int evidence, int aiGlossary) {
+                                 int diagrams, int evidence, int aiGlossary, int databases) {
     }
 }

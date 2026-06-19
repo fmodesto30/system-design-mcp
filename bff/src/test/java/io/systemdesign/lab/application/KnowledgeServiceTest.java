@@ -25,13 +25,13 @@ class KnowledgeServiceTest {
         @Override
         public List<Topic> topics() {
             return List.of(new Topic("cqrs", "CQRS", "Dados", "sep leitura/escrita", "...",
-                    null, null, null, null, null, null, List.of(SRC)));
+                    null, null, null, null, null, null, null, List.of(SRC)));
         }
 
         @Override
         public List<Pattern> patterns() {
             return List.of(new Pattern("saga", "Saga", "Data", "txn distribuída", "compensação",
-                    null, null, null, null, null, null, null, null, List.of(SRC)));
+                    null, null, null, null, null, null, null, null, null, List.of(SRC)));
         }
 
         @Override
@@ -57,6 +57,11 @@ class KnowledgeServiceTest {
         @Override
         public List<GlossaryEntry> aiGlossary() {
             return List.of(new GlossaryEntry("llm", "LLM", "MOTOR", "term", "prevê token", "função pura", "não pensa", List.of(SRC)));
+        }
+
+        @Override
+        public List<io.systemdesign.lab.domain.model.Database> databases() {
+            return List.of();
         }
     };
 

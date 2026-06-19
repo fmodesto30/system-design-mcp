@@ -7,28 +7,46 @@ function label(ref: SourceRef): string {
 }
 
 /**
- * Renders the evidence pointers for any item. Links only when the ref carries a `url` (those are
- * curl-verified at build time by scripts/resolve_source_urls.py); pdf/no-link refs render as plain
- * labels. This is the "no claim without a source" UI — and no broken links.
+ * Mostra as fontes de um item. As fontes SEM link (o workbook, repos locais) aparecem como rótulos
+ * inline — esse é o conteúdo do qual o Lab NÃO depende de páginas externas. As fontes COM link
+ * externo ficam recolhidas numa seção "Referências externas" (opcional): a documentação está toda
+ * dentro do MCP; o link de fora é só uma referência, não uma dependência.
  */
 export function SourceRefList({ refs }: { refs: SourceRef[] }) {
   if (!refs?.length) return null;
+  const inline = refs.filter((r) => !r.url);
+  const external = refs.filter((r) => r.url);
   return (
     <div className="sourcerefs">
-      <span className="sourcerefs-label">Fontes:</span>
-      {refs.map((ref, i) => {
-        const text = label(ref);
-        const title = ref.note ?? undefined;
-        return ref.url ? (
-          <a key={i} className={`chip src-${ref.kind}`} href={ref.url} target="_blank" rel="noreferrer" title={title}>
-            {text}
-          </a>
-        ) : (
-          <span key={i} className={`chip src-${ref.kind}`} title={title}>
-            {text}
-          </span>
-        );
-      })}
+      {inline.length > 0 && (
+        <>
+          <span className="sourcerefs-label">Fontes:</span>
+          {inline.map((ref, i) => (
+            <span key={i} className={`chip src-${ref.kind}`} title={ref.note ?? undefined}>
+              {label(ref)}
+            </span>
+          ))}
+        </>
+      )}
+      {external.length > 0 && (
+        <details className="sourcerefs-ext">
+          <summary>Referências externas ({external.length})</summary>
+          <div className="sourcerefs-ext-links">
+            {external.map((ref, i) => (
+              <a
+                key={i}
+                className={`chip src-${ref.kind}`}
+                href={ref.url!}
+                target="_blank"
+                rel="noreferrer"
+                title={ref.note ?? undefined}
+              >
+                {label(ref)} ↗
+              </a>
+            ))}
+          </div>
+        </details>
+      )}
     </div>
   );
 }

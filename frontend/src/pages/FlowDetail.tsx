@@ -5,6 +5,7 @@ import { Async } from "../components/States";
 import { SourceRefList } from "../components/SourceRefList";
 import { LinkChips, TagChips } from "../components/Chips";
 import { DiagramEmbeds } from "../components/DiagramEmbeds";
+import { DbRecommendation } from "../components/DbRecommendation";
 
 export function FlowDetail() {
   const { id = "" } = useParams();
@@ -33,6 +34,7 @@ export function FlowDetail() {
 
           {f.diagram ? <DiagramEmbeds ids={[f.diagram]} /> : null}
           <LinkChips label="Padrões relacionados" base="/patterns" ids={f.relatedPatterns} />
+          <DbRecommendation rec={f.databaseRecommendation} />
           <SourceRefList refs={f.sourceRefs} />
         </article>
       )}

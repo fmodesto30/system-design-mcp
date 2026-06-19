@@ -21,9 +21,10 @@ assert.deepEqual(names, ["get", "list", "overview", "search"], "unexpected tool 
 
 const parse = (res) => JSON.parse(res.content[0].text);
 
-// 2. overview returns 7 collections
+// 2. overview returns 8 collections (incl. databases)
 const ov = parse(await client.callTool({ name: "overview", arguments: {} }));
-assert.equal(ov.length, 7, "overview should list 7 collections");
+assert.equal(ov.length, 8, "overview should list 8 collections");
+assert.ok(ov.some((c) => c.kind === "databases" && c.count === 6), "databases collection (6) must be exposed");
 
 // 3. search finds the idempotency content
 const hits = parse(await client.callTool({ name: "search", arguments: { query: "idempotência kafka consumidor" } }));

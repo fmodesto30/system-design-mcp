@@ -36,6 +36,7 @@ export function Home() {
             <Stat to="/flows" n={s.flows} label="Fluxos" />
             <Stat to="/interview" n={s.interviewQuestions} label="Perguntas" />
             <Stat to="/diagrams" n={s.diagrams} label="Diagramas" />
+            <Stat to="/databases" n={s.databases} label="Bancos" />
             <Stat to="/evidence" n={s.evidence} label="Evidências" />
             <Stat to="/ai-agents" n={s.aiGlossary} label="IA & Agentes" />
           </div>

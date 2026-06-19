@@ -10,10 +10,14 @@ import { PatternDetail } from "./pages/PatternDetail";
 import { Flows } from "./pages/Flows";
 import { FlowDetail } from "./pages/FlowDetail";
 import { Diagrams } from "./pages/Diagrams";
+import { DiagramDetail } from "./pages/DiagramDetail";
 import { Interview } from "./pages/Interview";
 import { Compare } from "./pages/Compare";
 import { EvidencePage } from "./pages/Evidence";
 import { AiGlossary } from "./pages/AiGlossary";
+import { Databases } from "./pages/Databases";
+import { DatabaseDetail } from "./pages/DatabaseDetail";
+import { DatabaseBuilder } from "./pages/DatabaseBuilder";
 import "./styles.css";
 
 const router = createBrowserRouter([
@@ -29,10 +33,14 @@ const router = createBrowserRouter([
       { path: "flows", element: <Flows /> },
       { path: "flows/:id", element: <FlowDetail /> },
       { path: "diagrams", element: <Diagrams /> },
+      { path: "diagrams/:id", element: <DiagramDetail /> },
       { path: "interview", element: <Interview /> },
       { path: "compare", element: <Compare /> },
       { path: "evidence", element: <EvidencePage /> },
       { path: "ai-agents", element: <AiGlossary /> },
+      { path: "databases", element: <Databases /> },
+      { path: "databases/builder", element: <DatabaseBuilder /> },
+      { path: "databases/:id", element: <DatabaseDetail /> },
     ],
   },
 ]);

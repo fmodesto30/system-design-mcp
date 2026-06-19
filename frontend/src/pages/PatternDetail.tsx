@@ -7,6 +7,7 @@ import { SourceRefList } from "../components/SourceRefList";
 import { TradeOffTable } from "../components/TradeOffTable";
 import { LinkChips } from "../components/Chips";
 import { DiagramEmbeds } from "../components/DiagramEmbeds";
+import { DbRecommendation } from "../components/DbRecommendation";
 
 function Bullets({ title, items, kind }: { title: string; items: string[]; kind: string }) {
   if (!items?.length) return null;
@@ -73,6 +74,7 @@ export function PatternDetail() {
           )}
 
           <DiagramEmbeds ids={p.diagrams} />
+          <DbRecommendation rec={p.databaseRecommendation} />
           <LinkChips label="Padrões relacionados" base="/patterns" ids={p.relatedPatterns} />
           <SourceRefList refs={p.sourceRefs} />
         </article>

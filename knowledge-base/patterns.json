@@ -1,6 +1,7 @@
 [
   {
     "id": "database-per-service",
+    "databaseRecommendation": {"suggestedDbId": "aurora-postgresql", "level": "high", "rationale": "Um banco por serviço com 3 AZs inclusas e o melhor custo/AZ."},
     "name": "Database per Service",
     "category": "Data",
     "problem": "Quando vários microsserviços compartilham o mesmo banco de dados, o schema vira um acoplamento global: uma migração de um time quebra outro, ninguém consegue evoluir seu modelo de forma independente e o banco vira um ponto único de contenção e de falha. O isolamento de domínio prometido pelos microsserviços é desfeito na camada de dados.",
@@ -70,6 +71,7 @@
   },
   {
     "id": "saga",
+    "databaseRecommendation": {"suggestedDbId": "rds-postgresql", "level": "high", "rationale": "Cada passo é transação local ACID; estado/compensação durável por serviço."},
     "name": "Saga",
     "category": "Reliability",
     "problem": "Uma transação de negócio precisa atravessar vários microsserviços, cada um com seu próprio banco (database-per-service), ou levar muito tempo (long-lived transaction). Não dá para usar uma transação ACID única nem segurar locks por horas/dias. Sem coordenação, o sistema pode ficar em estado parcial e inconsistente — por exemplo, pagamento debitado mas pedido não concluído.",
@@ -215,6 +217,7 @@
   },
   {
     "id": "cqrs",
+    "databaseRecommendation": {"suggestedDbId": "aurora-postgresql", "level": "high", "rationale": "Lado de comando consistente (ACID); read models podem ir pra DynamoDB."},
     "name": "CQRS (Command Query Responsibility Segregation)",
     "category": "Data",
     "problem": "Um mesmo modelo de dados serve mal a escrita e a leitura ao mesmo tempo. A escrita quer normalização, transações ACID e regras de negócio rígidas para garantir consistência; a leitura quer dados desnormalizados, prontos para a tela, com baixa latência. Forçar os dois no mesmo modelo gera JOINs caros nas consultas e contenção entre o caminho de escrita e o de leitura, que não escalam de forma independente.",
@@ -285,6 +288,7 @@
   },
   {
     "id": "domain-event",
+    "databaseRecommendation": {"suggestedDbId": "documentdb", "level": "medium", "rationale": "Eventos como documentos de schema flexível (ou broker + read model)."},
     "name": "Domain Event",
     "category": "Messaging",
     "problem": "Quando um serviço muda o estado de um agregado (com database-per-service), outros serviços que precisam reagir a essa mudança não têm como saber — não podem ler o banco do dono. Acoplar a notificação via chamada síncrona direta cria dependência forte e blast radius (se o consumidor está fora, a escrita falha junto). Falta um meio desacoplado de avisar 'algo de negócio aconteceu aqui'.",
@@ -355,6 +359,7 @@
   },
   {
     "id": "event-sourcing",
+    "databaseRecommendation": {"suggestedDbId": "rds-postgresql", "level": "high", "rationale": "Event store append-only com UNIQUE(aggregate_id, version) e WAL — relacional maduro."},
     "name": "Event Sourcing",
     "category": "Data",
     "problem": "A persistência tradicional (state mutation) sobrescreve o estado a cada INSERT/UPDATE/DELETE, respondendo 'como a entidade está agora', mas apagando 'como ela chegou aqui'. Em domínios que mudam muito e exigem auditoria, reconstrução de estados e reatividade (pagamentos, saldos, ledgers), perder o histórico custa caro: não dá para auditar, reprocessar nem recompor o estado de forma confiável.",
@@ -427,6 +432,7 @@
   },
   {
     "id": "transactional-outbox",
+    "databaseRecommendation": {"suggestedDbId": "rds-postgresql", "level": "high", "rationale": "Outbox atômica com o estado de domínio na mesma transação SQL."},
     "name": "Transactional Outbox",
     "category": "Messaging",
     "problem": "Um serviço precisa, na mesma operação, gravar o estado no banco E publicar um evento no broker. Como são dois sistemas distintos, não há transação que cubra ambos: se grava no banco mas o broker está fora, o evento se perde; se publica o evento mas a transação do banco aborta, o evento mente. Esse é o problema de dual-write, que deixa o sistema inconsistente.",
@@ -499,6 +505,7 @@
   },
   {
     "id": "polling-publisher",
+    "databaseRecommendation": {"suggestedDbId": "rds-postgresql", "level": "medium", "rationale": "Polling lê a outbox no mesmo banco relacional do domínio."},
     "name": "Polling Publisher",
     "category": "Messaging",
     "problem": "Tendo gravado eventos em uma tabela outbox, é preciso publicá-los no broker. Como detectar e levar para o broker os eventos ainda não publicados, de forma simples e sem depender de recursos especiais do banco?",
@@ -567,6 +574,7 @@
   },
   {
     "id": "transaction-log-tailing",
+    "databaseRecommendation": {"suggestedDbId": "rds-postgresql", "level": "high", "rationale": "CDC sobre o WAL do Postgres (Debezium) — exige log de transação maduro."},
     "name": "Transaction Log Tailing",
     "category": "Messaging",
     "problem": "O polling da outbox adiciona carga constante ao banco e tem latência de intervalo. Como publicar os eventos da outbox (ou as próprias mudanças de estado) de forma eficiente e com baixa latência, sem ficar consultando a tabela repetidamente?",
@@ -635,6 +643,7 @@
   },
   {
     "id": "idempotent-consumer",
+    "databaseRecommendation": {"suggestedDbId": "rds-postgresql", "level": "medium", "rationale": "Chave de idempotência com UNIQUE no banco do consumidor."},
     "name": "Idempotent Consumer",
     "category": "Messaging",
     "problem": "Brokers e mecanismos de propagação de eventos (Kafka, SQS, outbox relay) entregam mensagens com garantia at-least-once: a mesma mensagem pode chegar duplicada por retentativas, redelivery após falha, reprocessamento ou reinício de saga. Se o consumidor aplicar o efeito mais de uma vez, o resultado fica errado — um crédito duplicado, um saldo inflado, uma cobrança em dobro.",
