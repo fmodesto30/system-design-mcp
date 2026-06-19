@@ -80,9 +80,9 @@ Projeto inteiro novo (~100 arquivos). Áreas:
 ## 8. Próximos 5 passos
 1. `git push origin feat/system-design-specialist-lab` (manda o `a5df61e`).
 2. Decidir merge `feat/...`→`main` (PR por URL OU `git merge --allow-unrelated-histories`).
-3. **Construir o MCP server** (`system-design-mcp`): stdio (Python recomendado), lendo o mesmo
-   `knowledge-base/*.json`; tools `search_system_design`, `get_pattern`, `get_topic`,
-   `get_interview_question`, `get_evidence`. Plugar no Docker MCP Gateway (`mcp-add`).
+3. **Construir o MCP server** (`system-design-mcp`) — **spec pronto em
+   [`docs/mcp-server-plan.md`](docs/mcp-server-plan.md)** (Node stdio, pasta `mcp/`, 4 tools
+   `overview`/`search`/`list`/`get`, lê os mesmos JSON, DoD definido). Construir CONTRA o spec.
 4. `docs/FOR-AGENTS.md` — como outro Claude consome o lab (ler repo / API / MCP).
 5. CI mínimo (GitHub Actions) rodando `./mvnw test` + `resolve_source_urls.py` sweep; depois
    code-split do bundle Mermaid (~1 MB) e busca full-text.
