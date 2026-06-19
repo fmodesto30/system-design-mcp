@@ -9,7 +9,8 @@ Não é um chatbot e **não usa LLM em runtime**: todo o conteúdo é uma base d
 conhecimento versionada (JSON), servida por um BFF em Java/Spring e navegada por um
 frontend React. **Cada afirmação aponta para a sua fonte** — nada é inventado.
 
-![tópicos](https://img.shields.io/badge/tópicos-29-5b9dff) ![padrões](https://img.shields.io/badge/padrões-20-5b9dff) ![perguntas](https://img.shields.io/badge/perguntas%20de%20entrevista-30-5b9dff) ![diagramas](https://img.shields.io/badge/diagramas%20mermaid-12-7ee0c0)
+[![CI](https://github.com/fmodesto30/system-design-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/fmodesto30/system-design-mcp/actions/workflows/ci.yml)
+![tópicos](https://img.shields.io/badge/tópicos-29-5b9dff) ![padrões](https://img.shields.io/badge/padrões-20-5b9dff) ![perguntas](https://img.shields.io/badge/perguntas%20de%20entrevista-31-5b9dff) ![diagramas](https://img.shields.io/badge/diagramas%20mermaid-12-7ee0c0)
 
 ---
 
