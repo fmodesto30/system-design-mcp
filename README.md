@@ -120,16 +120,29 @@ Início (mapa de tópicos) · Tópicos · Padrões · Fluxos · Diagramas ·
 API Gateway×BFF, forte×eventual) · **Evidências e fontes** · **IA & Agentes**
 (glossário pra dev backend — trilha separada, sourced a refs de IA).
 
+## MCP server (`system-design-mcp`)
+
+A base também é exposta como **MCP server stdio** (Node) — pra outro Claude/agente consultar como
+**tools nativas**, com as fontes junto. Lê os mesmos `knowledge-base/*.json` (sem LLM/rede em runtime).
+
+```bash
+cd mcp && npm install && npm run build && npm run smoke   # build + prova
+```
+Tools: `overview` · `search {query,kinds?,limit?}` · `list {kind}` · `get {kind,id}`. Registro e
+exemplos em [`docs/FOR-AGENTS.md`](docs/FOR-AGENTS.md); o repo já traz um `.mcp.json`. Um MCP stdio
+**não é daemon**: o harness spawna `node mcp/dist/server.js` sob demanda; "rodar" = registrar.
+
 ## Estrutura
 
 ```
 system-design-specialist-lab/
   bff/                 # Java 21 + Spring Boot, hexagonal (mvnw incluso)
   frontend/            # React + Vite + TypeScript
+  mcp/                 # MCP server stdio (Node) — expõe a base como tools
   knowledge-base/      # JSON versionado (fonte de verdade) + schema/
-  docs/                # inventário, mapa de conhecimento, ADRs, runbook, guia, trade-offs, glossário
+  docs/                # inventário, mapa de conhecimento, ADRs, runbook, guia, trade-offs, glossário, FOR-AGENTS
   scripts/             # build / test / run
-  docker-compose.yml
+  .mcp.json  docker-compose.yml
 ```
 
 ## Limitações

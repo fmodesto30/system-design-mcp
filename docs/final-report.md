@@ -153,3 +153,7 @@ mais diagramas por fluxo · export do guia em PDF · code-split do Mermaid.
   0 quebradas**.
 - **Docker:** `docker compose up --build` validado live; UI :5173, BFF host **18080** (8080 ocupado
   por outra stack na máquina). No container Linux o BFF sobe sem o workaround AF_UNIX.
+- **MCP server** (`mcp/`, Node stdio): expõe a base como 4 tools (`overview`/`search`/`list`/`get`),
+  lendo os mesmos `knowledge-base/*.json`. `npm run smoke` verde (search "idempotência kafka" → q02).
+  Registro em `.mcp.json` + `docs/FOR-AGENTS.md`. Spec em `docs/mcp-server-plan.md`. Faz o nome do
+  repo `system-design-mcp` virar verdade.

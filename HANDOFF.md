@@ -25,6 +25,8 @@ Projeto inteiro novo (~100 arquivos). Áreas:
 - `bff/` — Java 21 + Spring Boot 3.4, hexagonal (`domain/{model,port}`, `application`,
   `infrastructure/{web,persistence,config}`); `mvnw` incluso; `Dockerfile`.
 - `frontend/` — React + Vite + TS (`src/pages`, `src/components`, `api.ts`); `Dockerfile` + `nginx.conf`.
+- `mcp/` — MCP server stdio (Node/TS): `src/{kb,server}.ts`, `test/smoke.mjs`; lê os mesmos JSON.
+  `.mcp.json` (raiz) registra ele. `node_modules`/`dist` gitignored (setup = `npm install && build`).
 - `knowledge-base/*.json` — fonte de verdade (topics/patterns/flows/interview-questions/diagrams/
   evidence + **ai-agents-glossary**) + `schema/`. Cada `sourceRef` agora tem `url` verificada.
 - `docs/` — source-inventory, system-design-knowledge-map, architecture, ADRs, runbook,
@@ -62,9 +64,11 @@ Projeto inteiro novo (~100 arquivos). Áreas:
 - **Merge `feat/...` → `main`** no GitHub: PR **não aberto** (PAT só tem `Contents:write`, `gh pr
   create` falha). Esperando **decisão do Felipe**: abrir PR pela URL, ou eu faço merge via `git`.
   ⚠️ históricos não-relacionados (`--allow-unrelated-histories` se for merge de verdade).
-- **MCP server** (`system-design-mcp`): proposto e Felipe topou ("vc decide"), **não construído
-  ainda**. Faria o nome do repo virar verdade — expõe a KB como tools pra outro Claude consumir.
-- **`a5df61e` não-pushado** (push no primeiro movimento).
+- **MCP server** (`system-design-mcp`): ✅ **CONSTRUÍDO** em `mcp/` (Node stdio, 4 tools
+  overview/search/list/get, lê os mesmos JSON). `npm run smoke` verde. `.mcp.json` no repo +
+  `docs/FOR-AGENTS.md`. **Falta (decisão Felipe):** registrar no `.mcp.json`/`~/.claude.json` do
+  workspace `E:\Claude` (caminho absoluto) pra usar nas sessões dele — não apliquei sem ok.
+  Path via Docker MCP Gateway = opcional (ver `docs/mcp-server-plan.md`).
 
 ## 7. Riscos
 - **`merge_validate_kb.py` é footgun agora:** ele reescreve os `knowledge-base/*.json` a partir de
@@ -80,10 +84,10 @@ Projeto inteiro novo (~100 arquivos). Áreas:
 ## 8. Próximos 5 passos
 1. `git push origin feat/system-design-specialist-lab` (manda o `a5df61e`).
 2. Decidir merge `feat/...`→`main` (PR por URL OU `git merge --allow-unrelated-histories`).
-3. **Construir o MCP server** (`system-design-mcp`) — **spec pronto em
-   [`docs/mcp-server-plan.md`](docs/mcp-server-plan.md)** (Node stdio, pasta `mcp/`, 4 tools
-   `overview`/`search`/`list`/`get`, lê os mesmos JSON, DoD definido). Construir CONTRA o spec.
-4. `docs/FOR-AGENTS.md` — como outro Claude consome o lab (ler repo / API / MCP).
+3. **Registrar o MCP** (já construído em `mcp/`, smoke verde): adicionar `system-design` no
+   `.mcp.json`/`~/.claude.json` do workspace `E:\Claude` com caminho ABSOLUTO pro
+   `mcp/dist/server.js`, e reabrir a sessão pra ver `mcp__system-design__*`. (config global → só com ok do Felipe).
+4. (opcional) Path Docker MCP Gateway pro MCP — containerizar + catálogo (`docs/mcp-server-plan.md`).
 5. CI mínimo (GitHub Actions) rodando `./mvnw test` + `resolve_source_urls.py` sweep; depois
    code-split do bundle Mermaid (~1 MB) e busca full-text.
 
