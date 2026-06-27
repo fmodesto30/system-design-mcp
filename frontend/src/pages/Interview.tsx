@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { api, type QuestionSummary } from "../api";
 import { useAsync } from "../hooks";
 import { Async } from "../components/States";
@@ -61,31 +62,23 @@ function QuestionCard({ q }: { q: QuestionSummary }) {
   );
 }
 
-const TABS = [
-  { id: "overview", label: "Visão geral" },
-  { id: "system-design", label: "System Design" },
-  { id: "dsa", label: "DSA" },
-  { id: "behavioral", label: "Comportamental & Estratégia" },
-] as const;
-
-type TabId = (typeof TABS)[number]["id"];
-
-function Pillars({ onPick }: { onPick: (t: TabId) => void }) {
-  const cards: { id: TabId; title: string; badge: string; desc: string }[] = [
+/** /entrevista — landing do Modo Entrevista. */
+export function InterviewOverview() {
+  const cards = [
     {
-      id: "system-design",
+      to: "/entrevista/system-design",
       title: "System Design",
       badge: "framework + banco",
       desc: "Framework de resposta, estimativa (Lei de Little, Scale Cube) e o banco de perguntas filtrável por dificuldade.",
     },
     {
-      id: "dsa",
+      to: "/entrevista/dsa",
       title: "DSA",
       badge: "roadmap",
       desc: "Os 12 padrões na ordem certa, o método de ataque e como treinar. Sem editor aqui — você resolve no LeetCode.",
     },
     {
-      id: "behavioral",
+      to: "/entrevista/comportamental",
       title: "Comportamental & Estratégia",
       badge: "STAR + checklist",
       desc: "STAR, histórias pra ter prontas, perguntas comuns e o checklist de véspera e dia da entrevista.",
@@ -93,37 +86,45 @@ function Pillars({ onPick }: { onPick: (t: TabId) => void }) {
   ];
   return (
     <div>
+      <h1>Modo Entrevista</h1>
+      <p className="lede">
+        Ecossistema de preparação: <strong>System Design</strong> (framework + banco de perguntas), <strong>DSA</strong>{" "}
+        (roadmap e dicas — você pratica no LeetCode) e <strong>comportamental + como chegar preparado</strong>. Use o
+        menu à esquerda ou os atalhos abaixo.
+      </p>
       <div className="prep-pillars">
         {cards.map((c) => (
-          <button key={c.id} className="list-card prep-pillar" onClick={() => onPick(c.id)}>
+          <Link key={c.to} to={c.to} className="list-card prep-pillar">
             <div className="list-card-head">
               <h3>{c.title}</h3>
               <span className="badge">{c.badge}</span>
             </div>
             <p>{c.desc}</p>
             <span className="prep-pillar-go">Abrir →</span>
-          </button>
+          </Link>
         ))}
       </div>
       <div className="callout">
-        <strong>Como usar.</strong> Escolha uma trilha por sessão de estudo (não faça as três pela metade). Cada
-        trilha abre com um framework no topo, seguido de dicas acionáveis. As perguntas de System Design vêm da base
-        de conhecimento (com fontes citadas); o conteúdo de DSA e comportamental é guia de estudo curado.
+        <strong>Como usar.</strong> Escolha uma trilha por sessão de estudo (não faça as três pela metade). Cada trilha
+        abre com um framework no topo, seguido de dicas acionáveis. As perguntas de System Design vêm da base de
+        conhecimento (com fontes citadas); o conteúdo de DSA e comportamental é guia de estudo curado.
       </div>
     </div>
   );
 }
 
-function SystemDesignTab() {
+/** /entrevista/system-design — estratégia + banco de perguntas (da KB). */
+export function InterviewSystemDesign() {
   const state = useAsync(() => api.questions(), []);
   const [diff, setDiff] = useState("all");
   return (
-    <>
+    <div>
+      <h1>System Design — entrevista</h1>
       <PrepSection pillar={systemDesignPrep} />
       <h2>Banco de perguntas</h2>
       <p className="muted">
-        Clique para abrir resposta curta, detalhada, desenho mental e como responder. Filtre pela dificuldade que
-        você quer treinar.
+        Clique para abrir resposta curta, detalhada, desenho mental e como responder. Filtre pela dificuldade que você
+        quer treinar.
       </p>
       <Async state={state}>
         {(list) => {
@@ -147,33 +148,26 @@ function SystemDesignTab() {
           );
         }}
       </Async>
-    </>
+    </div>
   );
 }
 
-export function Interview() {
-  const [tab, setTab] = useState<TabId>("overview");
+/** /entrevista/dsa — roadmap e dicas de coding interview. */
+export function InterviewDsa() {
   return (
     <div>
-      <h1>Modo Entrevista</h1>
-      <p className="lede">
-        Ecossistema de preparação: <strong>System Design</strong> (framework + banco de perguntas),{" "}
-        <strong>DSA</strong> (roadmap e dicas — você pratica no LeetCode) e{" "}
-        <strong>comportamental + como chegar preparado</strong>.
-      </p>
-      <div className="button-group prep-tabs">
-        {TABS.map((t) => (
-          <button key={t.id} className={tab === t.id ? "active" : ""} onClick={() => setTab(t.id)}>
-            {t.label}
-          </button>
-        ))}
-      </div>
-      <div className="prep-tabpanel">
-        {tab === "overview" && <Pillars onPick={setTab} />}
-        {tab === "system-design" && <SystemDesignTab />}
-        {tab === "dsa" && <PrepSection pillar={dsaPrep} />}
-        {tab === "behavioral" && <PrepSection pillar={behavioralPrep} />}
-      </div>
+      <h1>DSA — estruturas &amp; algoritmos</h1>
+      <PrepSection pillar={dsaPrep} />
+    </div>
+  );
+}
+
+/** /entrevista/comportamental — STAR, histórias e como chegar preparado. */
+export function InterviewBehavioral() {
+  return (
+    <div>
+      <h1>Comportamental &amp; Estratégia</h1>
+      <PrepSection pillar={behavioralPrep} />
     </div>
   );
 }

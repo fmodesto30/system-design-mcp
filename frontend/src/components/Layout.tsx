@@ -1,4 +1,5 @@
 import { NavLink, Outlet, Link } from "react-router-dom";
+import { ModeSwitch } from "./ModeSwitch";
 
 const NAV: { to: string; label: string }[] = [
   { to: "/", label: "Início" },
@@ -7,19 +8,24 @@ const NAV: { to: string; label: string }[] = [
   { to: "/flows", label: "Fluxos" },
   { to: "/diagrams", label: "Diagramas" },
   { to: "/databases", label: "Bancos de Dados" },
-  { to: "/interview", label: "Modo Entrevista" },
   { to: "/compare", label: "Comparar" },
   { to: "/evidence", label: "Evidências" },
   { to: "/ai-agents", label: "IA & Agentes" },
 ];
 
+/** Layout da Base de Conhecimento de System Design (o produto original). */
 export function Layout() {
   return (
     <div className="app">
       <aside className="sidebar">
+        <ModeSwitch />
         <Link to="/" className="brand">
           <span className="brand-mark">SD</span>
-          <span className="brand-text">System Design<br />Specialist Lab</span>
+          <span className="brand-text">
+            System Design
+            <br />
+            Specialist Lab
+          </span>
         </Link>
         <nav>
           {NAV.map((n) => (
