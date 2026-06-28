@@ -5,6 +5,18 @@ import { dbRows, dbDr, dbScenarios, COMPARE_DIMS, DR_DIMS, type DbRow, type DbSc
 const BY_ID = Object.fromEntries(dbRows.map((d) => [d.id, d]));
 const cvar = (c: string) => ({ "--c": c } as CSSProperties);
 
+// Cada dimensão técnica do comparativo aponta pro tópico que a explica (interliga com a teoria).
+const TOPIC_FOR_DIM: Partial<Record<keyof DbRow, string>> = {
+  modeloDados: "databases-indexing",
+  escala: "performance-scalability",
+  failover: "spof-dr",
+  indice: "databases-indexing",
+  storage: "data-replication",
+  concorrencia: "concurrency-parallelism",
+  cap: "cap-acid-base",
+  pacelc: "pacelc",
+};
+
 function Stars({ n }: { n: number }) {
   return (
     <span className="stars" aria-label={`${n} de 5`}>
@@ -95,9 +107,11 @@ function ScenarioCard({ s }: { s: DbScenario }) {
 function CompareTable<T extends { id: string; name: string; color: string }>({
   rows,
   dims,
+  topicFor,
 }: {
   rows: T[];
   dims: { key: keyof T; label: string; tip: string }[];
+  topicFor?: (key: keyof T) => string | undefined;
 }) {
   return (
     <div className="table-wrap">
@@ -116,7 +130,12 @@ function CompareTable<T extends { id: string; name: string; color: string }>({
           {dims.map((dim) => (
             <tr key={String(dim.key)}>
               <td className="dim">
-                {dim.label} <Tip text={dim.tip} />
+                {topicFor && topicFor(dim.key) ? (
+                  <Link to={`/topics/${topicFor(dim.key)}`}>{dim.label}</Link>
+                ) : (
+                  dim.label
+                )}{" "}
+                <Tip text={dim.tip} />
               </td>
               {rows.map((d) => (
                 <td key={d.id}>{String(d[dim.key])}</td>
@@ -146,6 +165,7 @@ export function Databases() {
         <a href="#comparativo">Comparativo</a>
         <a href="#dr">Backup / DR</a>
         <a href="#cap">CAP / PACELC</a>
+        <a href="#teoria">Teoria</a>
         <Link to="/databases/builder">Monte seu banco →</Link>
       </nav>
 
@@ -169,8 +189,8 @@ export function Databases() {
 
       <section id="comparativo">
         <h2>Comparativo Técnico (6 opções)</h2>
-        <p className="muted">Passe o mouse no “?” de cada característica para o que ela significa.</p>
-        <CompareTable rows={dbRows} dims={COMPARE_DIMS} />
+        <p className="muted">Característica com link abre a teoria que a explica; passe o mouse no “?” pra um resumo.</p>
+        <CompareTable rows={dbRows} dims={COMPARE_DIMS} topicFor={(k) => TOPIC_FOR_DIM[k]} />
       </section>
 
       <section id="dr">
@@ -183,7 +203,7 @@ export function Databases() {
         <p className="muted">
           Sob partição de rede (CAP) é impossível ter Consistência <em>e</em> Disponibilidade — escolhe 2. O PACELC
           estende: mesmo sem partição (Else), há trade-off Latência×Consistência. Aprofunde em{" "}
-          <Link to="/topics/cap-acid-base">CAP, ACID e BASE</Link> e <Link to="/topics/pacelc-theorem">PACELC</Link>.
+          <Link to="/topics/cap-acid-base">CAP, ACID e BASE</Link> e <Link to="/topics/pacelc">PACELC</Link>.
         </p>
         <div className="cap-grid">
           <div className="cap-col cp">
@@ -207,6 +227,39 @@ export function Databases() {
                 </Link>
               ))}
             </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="teoria">
+        <h2>Teoria &amp; conceitos</h2>
+        <p className="muted">
+          O que está por trás de cada decisão — clique pra explicação fonteada. Cada banco também tem suas fontes
+          (docs AWS + <em>System Design Workbook</em>) na página de detalhe.
+        </p>
+        <div className="theory-grid">
+          <div className="theory-col">
+            <h3>Fundamentos</h3>
+            <Link to="/topics/cap-acid-base">Teorema CAP, ACID e BASE</Link>
+            <Link to="/topics/pacelc">Teorema PACELC</Link>
+            <Link to="/topics/databases-indexing">Modelos de dados &amp; indexação</Link>
+            <Link to="/topics/concurrency-parallelism">Concorrência &amp; MVCC</Link>
+          </div>
+          <div className="theory-col">
+            <h3>Escala &amp; resiliência</h3>
+            <Link to="/topics/sharding-partitioning">Sharding &amp; particionamento</Link>
+            <Link to="/topics/data-replication">Replicação de dados</Link>
+            <Link to="/topics/caching">Estratégias de cache</Link>
+            <Link to="/topics/spof-dr">SPOF &amp; Disaster Recovery</Link>
+          </div>
+          <div className="theory-col">
+            <h3>Patterns que combinam</h3>
+            <Link to="/patterns/event-sourcing">Event Sourcing</Link>
+            <Link to="/patterns/cqrs">CQRS</Link>
+            <Link to="/patterns/saga">Saga</Link>
+            <Link to="/patterns/transactional-outbox">Transactional Outbox</Link>
+            <Link to="/patterns/idempotent-consumer">Idempotent Consumer</Link>
+            <Link to="/patterns/database-per-service">Database per Service</Link>
           </div>
         </div>
       </section>

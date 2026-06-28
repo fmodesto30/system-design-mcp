@@ -485,6 +485,14 @@ table.compare-table tbody tr:hover td:not(.dim) { background: rgba(255, 255, 255
 .db-builder-cta h2 { border: none; margin: 0 0 6px; }
 .db-builder-cta .btn { margin-top: 14px; }
 
+/* Teoria & conceitos (interliga com tópicos/patterns) */
+.theory-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
+.theory-col { background: var(--surface-1); border: 1px solid var(--border-subtle); border-radius: var(--radius-lg); padding: 14px 18px; }
+.theory-col h3 { margin: 0 0 8px; color: var(--cyan); font-size: 14px; }
+.theory-col a { display: block; padding: 5px 0; color: var(--text-secondary); font-size: 14px; border-top: 1px solid var(--border-subtle); }
+.theory-col a:first-of-type { border-top: none; }
+.theory-col a:hover { color: var(--text-primary); text-decoration: none; }
+
 @media (max-width: 760px) {
-  .scenario-grid, .cap-grid { grid-template-columns: 1fr; }
+  .scenario-grid, .cap-grid, .theory-grid { grid-template-columns: 1fr; }
 }
