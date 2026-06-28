@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { NavLink, Outlet, Link } from "react-router-dom";
 import { ModeSwitch } from "./ModeSwitch";
 
@@ -15,11 +16,20 @@ const NAV: { to: string; label: string }[] = [
 
 /** Layout da Base de Conhecimento de System Design (o produto original). */
 export function Layout() {
+  const [open, setOpen] = useState(false);
+  const close = () => setOpen(false);
   return (
     <div className="app">
-      <aside className="sidebar">
+      <header className="mobile-bar">
+        <button className="hamburger" onClick={() => setOpen(true)} aria-label="Abrir menu">
+          ☰
+        </button>
+        <span className="mobile-title">System Design Lab</span>
+      </header>
+      {open ? <div className="drawer-overlay" onClick={close} /> : null}
+      <aside className={`sidebar ${open ? "open" : ""}`}>
         <ModeSwitch />
-        <Link to="/" className="brand">
+        <Link to="/" className="brand" onClick={close}>
           <span className="brand-mark">SD</span>
           <span className="brand-text">
             System Design
@@ -27,7 +37,7 @@ export function Layout() {
             Specialist Lab
           </span>
         </Link>
-        <nav>
+        <nav onClick={close}>
           {NAV.map((n) => (
             <NavLink key={n.to} to={n.to} end={n.to === "/"} className={({ isActive }) => (isActive ? "active" : "")}>
               {n.label}

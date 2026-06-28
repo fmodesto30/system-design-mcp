@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { NavLink, Outlet, Link } from "react-router-dom";
 import { ModeSwitch } from "./ModeSwitch";
 
@@ -12,11 +13,20 @@ const NAV: { to: string; label: string; end?: boolean }[] = [
 
 /** Layout próprio do Modo Entrevista — sidebar e identidade separadas da Base de Conhecimento. */
 export function InterviewLayout() {
+  const [open, setOpen] = useState(false);
+  const close = () => setOpen(false);
   return (
     <div className="app">
-      <aside className="sidebar">
+      <header className="mobile-bar">
+        <button className="hamburger" onClick={() => setOpen(true)} aria-label="Abrir menu">
+          ☰
+        </button>
+        <span className="mobile-title">Modo Entrevista</span>
+      </header>
+      {open ? <div className="drawer-overlay" onClick={close} /> : null}
+      <aside className={`sidebar ${open ? "open" : ""}`}>
         <ModeSwitch />
-        <Link to="/entrevista" className="brand">
+        <Link to="/entrevista" className="brand" onClick={close}>
           <span className="brand-mark interview">🎯</span>
           <span className="brand-text">
             Modo
@@ -24,7 +34,7 @@ export function InterviewLayout() {
             Entrevista
           </span>
         </Link>
-        <nav>
+        <nav onClick={close}>
           {NAV.map((n) => (
             <NavLink key={n.to} to={n.to} end={n.end} className={({ isActive }) => (isActive ? "active" : "")}>
               {n.label}
