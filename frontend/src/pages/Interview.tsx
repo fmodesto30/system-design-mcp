@@ -10,6 +10,7 @@ import { LinkChips, TagChips } from "../components/Chips";
 import { PrepSection } from "../components/PrepSection";
 import { dsaPrep, systemDesignPrep, behavioralPrep } from "../data/interviewPrep";
 import { complexityGuide, structures, type DataStructure } from "../data/dsaFundamentals";
+import { reports, crossLessons, type InterviewReport } from "../data/interviewReports";
 
 function QuestionCard({ q }: { q: QuestionSummary }) {
   const [open, setOpen] = useState(false);
@@ -357,6 +358,86 @@ export function InterviewFundamentos() {
           ))}
         </div>
       </section>
+    </div>
+  );
+}
+
+function ReportCard({ r }: { r: InterviewReport }) {
+  return (
+    <div className={`report-card result-${r.result}`}>
+      <div className="report-head">
+        <h3>{r.company}</h3>
+        <span className="report-result">{r.resultLabel}</span>
+      </div>
+      <p className="muted">{r.summary}</p>
+      <div className="report-loop">
+        {r.loop.map((l, i) => (
+          <span key={i} className="chip">
+            {l}
+          </span>
+        ))}
+      </div>
+      <div className="report-rounds">
+        {r.rounds.map((rd, i) => (
+          <div key={i} className="report-round">
+            <h4>{rd.type}</h4>
+            <p className="muted">{rd.detail}</p>
+            {rd.questions?.map((q, j) => (
+              <div key={j} className="report-q">
+                <span className="report-q-text">{q.q}</span>
+                {q.tag ? (
+                  q.link ? (
+                    <Link to={q.link} className="chip mono">
+                      {q.tag} →
+                    </Link>
+                  ) : (
+                    <span className="chip mono">{q.tag}</span>
+                  )
+                ) : null}
+              </div>
+            ))}
+            {rd.note ? (
+              <div className="callout report-note">
+                <strong>⚠ O que pegou.</strong> {rd.note}
+              </div>
+            ) : null}
+          </div>
+        ))}
+      </div>
+      <h4>Lições</h4>
+      <ul className="report-lessons">
+        {r.lessons.map((l, i) => (
+          <li key={i}>{l}</li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/** /entrevista/relatos — loops reais de entrevista destilados + lições. */
+export function InterviewRelatos() {
+  return (
+    <div>
+      <h1>Relatos de Entrevista</h1>
+      <p className="lede">
+        Loops reais destilados — as rodadas, as questões (linkadas pro que estudar aqui no lab) e as lições. Intel de
+        verdade, não teoria.
+      </p>
+      <div className="hero-card report-synthesis">
+        <h2>{crossLessons.title}</h2>
+        <ul className="report-lessons">
+          {crossLessons.points.map((p, i) => (
+            <li key={i}>
+              <MD text={p} />
+            </li>
+          ))}
+        </ul>
+      </div>
+      <div className="report-grid">
+        {reports.map((r) => (
+          <ReportCard key={r.id} r={r} />
+        ))}
+      </div>
     </div>
   );
 }

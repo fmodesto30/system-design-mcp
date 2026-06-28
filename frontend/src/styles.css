@@ -556,6 +556,31 @@ table.ds-ops code { font-size: 12px; }
 
 @media (max-width: 760px) { .bigo-cols, .ds-cols { grid-template-columns: 1fr; } }
 
+/* ===================== Relatos de Entrevista ===================== */
+.report-synthesis ul { margin: 10px 0 0; padding-left: 18px; }
+.report-synthesis li { margin: 9px 0; color: var(--text-secondary); line-height: 1.55; }
+.report-grid { display: grid; grid-template-columns: 1fr; gap: 18px; margin-top: 8px; }
+.report-card {
+  background: var(--surface-1); border: 1px solid var(--border-subtle); border-left: 3px solid var(--border-strong);
+  border-radius: var(--radius-lg); padding: 18px 20px; box-shadow: var(--shadow-sm);
+}
+.report-card.result-parcial { border-left-color: var(--amber); }
+.report-card.result-reprovado { border-left-color: var(--danger); }
+.report-card.result-passou { border-left-color: var(--success); }
+.report-card.result-info { border-left-color: var(--info); }
+.report-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.report-head h3 { margin: 0; font-size: 18px; }
+.report-result { font-size: 12px; font-weight: 600; color: var(--text-secondary); padding: 3px 11px; border-radius: 99px; background: var(--surface-2); border: 1px solid var(--border-subtle); }
+.report-loop { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0 4px; }
+.report-round { padding: 13px 0; border-top: 1px solid var(--border-subtle); }
+.report-round h4 { margin: 0 0 4px; color: var(--cyan); }
+.report-round > p { margin: 0 0 6px; }
+.report-q { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 7px 0; }
+.report-q-text { color: var(--text-secondary); font-size: 13.5px; flex: 1; min-width: 200px; }
+.report-note { font-size: 13.5px; border-left-color: var(--amber); background: rgba(246, 199, 107, 0.09); margin: 10px 0 2px; }
+.report-lessons { margin: 6px 0 0; padding-left: 18px; }
+.report-lessons li { margin: 6px 0; color: var(--text-secondary); font-size: 14px; line-height: 1.5; }
+
 /* CAP / PACELC */
 .cap-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 .cap-col { background: var(--surface-1); border: 1px solid var(--border-subtle); border-radius: var(--radius-lg); padding: 16px 18px; }

@@ -24,6 +24,7 @@ import {
   InterviewDsa,
   InterviewBehavioral,
   InterviewFundamentos,
+  InterviewRelatos,
 } from "./pages/Interview";
 import "./styles.css";
 
@@ -62,6 +63,7 @@ const router = createBrowserRouter([
       { path: "dsa", element: <InterviewDsa /> },
       { path: "fundamentos", element: <InterviewFundamentos /> },
       { path: "comportamental", element: <InterviewBehavioral /> },
+      { path: "relatos", element: <InterviewRelatos /> },
     ],
   },
 ]);

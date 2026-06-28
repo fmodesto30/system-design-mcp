@@ -7,6 +7,7 @@ const NAV: { to: string; label: string; end?: boolean }[] = [
   { to: "/entrevista/dsa", label: "DSA" },
   { to: "/entrevista/fundamentos", label: "Estruturas & Big-O" },
   { to: "/entrevista/comportamental", label: "Comportamental & Estratégia" },
+  { to: "/entrevista/relatos", label: "Relatos de Entrevista" },
 ];
 
 /** Layout próprio do Modo Entrevista — sidebar e identidade separadas da Base de Conhecimento. */
