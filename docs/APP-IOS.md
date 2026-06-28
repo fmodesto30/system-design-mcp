@@ -10,7 +10,8 @@ O lab virou um **app instalável** (PWA). No iPhone:
 4. Pronto: vira um app com **ícone próprio**, abre em **tela cheia** (sem a barra do Safari) e **funciona offline** depois da 1ª visita.
 
 ### Requisitos de acesso
-- O iPhone precisa **alcançar o servidor**. O container Docker já escuta `0.0.0.0:5173`, então em **rede local** dá pra acessar pelo **IP da máquina** (`http://<IP-do-PC>:5173`) — confirme que o firewall do Windows libera a porta 5173.
+- O iPhone precisa **alcançar o servidor**. O container Docker já escuta `0.0.0.0:5173`, então em **rede local** dá pra acessar pelo **IP da máquina**. Detectei o IP desta máquina na LAN: **`http://192.168.15.4:5173`** (interface Ethernet 2) — com o iPhone na mesma rede Wi-Fi, abra esse endereço no Safari. Se não conectar, confirme que o **firewall do Windows libera a porta 5173** (regra de entrada) e que o IP não mudou (`ipconfig`).
+- Ao abrir no Safari do iPhone, aparece um **banner** ensinando a instalar ("Compartilhar → Adicionar à Tela de Início").
 - ⚠️ O **service worker** (offline + instalação completa) só ativa em **HTTPS** ou **localhost**. Em `http://<IP>` na LAN o app abre e é instalável, mas o offline pode não registrar. Pra experiência completa fora de casa, faça um **deploy com HTTPS** (qualquer host estático + o BFF atrás de TLS).
 
 ### O que o PWA entrega (verificado)

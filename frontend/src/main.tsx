@@ -27,6 +27,7 @@ import {
   InterviewRelatos,
 } from "./pages/Interview";
 import { RouteError, NotFound } from "./pages/RouteError";
+import { InstallHint } from "./components/InstallHint";
 import "./styles.css";
 
 const router = createBrowserRouter([
@@ -75,6 +76,7 @@ const router = createBrowserRouter([
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <RouterProvider router={router} />
+    <InstallHint />
   </React.StrictMode>,
 );
 

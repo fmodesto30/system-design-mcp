@@ -474,11 +474,14 @@ table.compare-table tbody tr:hover td:not(.dim) { background: rgba(255, 255, 255
 
 /* Botão "?" que abre o modal de conceito */
 .tip {
+  position: relative;
   display: inline-grid; place-items: center; width: 16px; height: 16px; border-radius: 50%;
   border: 1px solid var(--border-default); background: none; color: var(--text-muted);
   font-size: 10px; font-weight: 700; line-height: 1; padding: 0; cursor: pointer;
   vertical-align: middle; font-family: var(--font-sans);
 }
+/* área tocável ~38px (dedo no iPhone) sem inchar o visual de 16px */
+.tip::after { content: ""; position: absolute; inset: -11px; }
 .tip:hover { color: var(--brand-hover); border-color: var(--brand-border); background: var(--brand-soft); }
 
 /* Modal de conceito */
@@ -602,38 +605,71 @@ table.ds-ops code { font-size: 12px; }
 .mobile-bar { display: none; }
 
 @media (max-width: 720px) {
-  .app { grid-template-columns: 1fr; }
+  .app { grid-template-columns: minmax(0, 1fr); }
 
   /* Top bar com hambúrguer — só no telefone */
   .mobile-bar {
     display: flex; align-items: center; gap: 12px; position: sticky; top: 0; z-index: 40;
-    padding: 10px 14px; padding-top: calc(10px + env(safe-area-inset-top));
+    padding: 10px max(14px, env(safe-area-inset-right)) 10px max(14px, env(safe-area-inset-left));
+    padding-top: calc(10px + env(safe-area-inset-top));
     background: var(--bg-sidebar); border-bottom: 1px solid var(--border-subtle);
   }
   .hamburger {
     background: none; border: 1px solid var(--border-default); color: var(--text-primary);
-    width: 40px; height: 40px; border-radius: 10px; font-size: 18px; line-height: 1; cursor: pointer;
-    display: grid; place-items: center;
+    width: 44px; height: 44px; border-radius: 11px; font-size: 18px; line-height: 1; cursor: pointer;
+    display: grid; place-items: center; flex-shrink: 0;
   }
   .hamburger:active { background: rgba(255, 255, 255, 0.06); }
-  .mobile-title { font-weight: 700; font-size: 15px; letter-spacing: -0.01em; }
+  .mobile-title {
+    flex: 1; min-width: 0; font-weight: 700; font-size: 15px; letter-spacing: -0.01em;
+    overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+  }
 
-  /* Sidebar vira gaveta deslizante */
+  /* Sidebar vira gaveta deslizante (com rolagem interna pra não cortar itens em tela curta) */
   .sidebar {
     position: fixed; top: 0; left: 0; bottom: 0; height: 100%; width: 280px; max-width: 84vw;
     transform: translateX(-100%); transition: transform 240ms var(--ease-out); z-index: 60;
+    overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
     padding-top: calc(20px + env(safe-area-inset-top));
     padding-bottom: calc(16px + env(safe-area-inset-bottom));
+    padding-left: max(16px, env(safe-area-inset-left));
   }
   .sidebar.open { transform: translateX(0); box-shadow: 0 0 60px rgba(0, 0, 0, 0.65); }
   .drawer-overlay { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.5); z-index: 50; }
   .sidebar nav a { padding: 11px 12px; font-size: 15px; }
 
-  /* Conteúdo: padding de telefone + safe-area do home indicator */
-  .content { padding: 18px 16px; padding-bottom: calc(24px + env(safe-area-inset-bottom)); max-width: 100%; }
+  /* Conteúdo: padding de telefone + safe-areas (notch top/lateral, home indicator) */
+  .content {
+    padding: 18px max(16px, env(safe-area-inset-right)) calc(24px + env(safe-area-inset-bottom))
+      max(16px, env(safe-area-inset-left));
+    max-width: 100%;
+  }
   h1, .page-head h1 { font-size: 25px; }
+
+  /* Alvos de toque maiores + tabelas/cards no estreito */
   .db-section-nav { position: static; }
+  .db-section-nav a { padding: 9px 14px; }
+  table.compare-table td.dim { white-space: normal; }
+  table.compare-table td:not(.dim) { font-size: 13px; }
+  .dsc-specs b { overflow-wrap: anywhere; }
+  .cat-card li { margin: 8px 0; }
+  .cat-card li a { display: inline-block; padding: 3px 0; }
+  .cat-card li .muted { display: block; font-size: 13px; }
+
   .scenario-grid, .cap-grid, .bigo-cols, .ds-cols, .report-grid, .prep-pillars { grid-template-columns: 1fr; }
+}
+
+/* Banner de instalação (iOS — só aparece no Safari quando não instalado) */
+.install-hint {
+  position: fixed; left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom)); z-index: 70;
+  display: flex; align-items: center; gap: 10px; padding: 12px 14px;
+  background: var(--surface-3); border: 1px solid var(--brand-border); border-radius: 12px;
+  box-shadow: 0 14px 44px rgba(0, 0, 0, 0.55); font-size: 13.5px; color: var(--text-secondary); line-height: 1.4;
+}
+.install-hint strong { color: var(--text-primary); }
+.install-hint button {
+  margin-left: auto; flex-shrink: 0; background: none; border: none; color: var(--text-muted);
+  font-size: 20px; line-height: 1; cursor: pointer; padding: 0 2px;
 }
 
 /* CAP / PACELC */
