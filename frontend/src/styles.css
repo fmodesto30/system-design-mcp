@@ -581,6 +581,23 @@ table.ds-ops code { font-size: 12px; }
 .report-lessons { margin: 6px 0 0; padding-left: 18px; }
 .report-lessons li { margin: 6px 0; color: var(--text-secondary); font-size: 14px; line-height: 1.5; }
 
+/* Os 7 erros (visão do entrevistador) */
+.pitfalls-card {
+  background: linear-gradient(180deg, rgba(251, 113, 133, 0.06), transparent 42%), var(--surface-1);
+  border: 1px solid var(--border-default); border-radius: var(--radius-lg); padding: 18px 22px; margin: 20px 0 28px;
+  box-shadow: var(--shadow-sm);
+}
+.pitfalls-card h2 { border: none; margin: 0 0 2px; }
+.pitfalls-list { margin: 12px 0 0; padding-left: 22px; }
+.pitfalls-list li { margin: 9px 0; color: var(--text-secondary); line-height: 1.55; }
+.pitfalls-list li strong { color: var(--text-primary); }
+
+/* Stack de recursos (aba DSA) */
+.rs-section { margin-top: 12px; }
+.rs-section h4 { margin: 8px 0 2px; color: var(--text-primary); }
+.rs-flow { margin: 6px 0 0; padding-left: 20px; }
+.rs-flow li { margin: 6px 0; color: var(--text-secondary); }
+
 /* CAP / PACELC */
 .cap-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 .cap-col { background: var(--surface-1); border: 1px solid var(--border-subtle); border-radius: var(--radius-lg); padding: 16px 18px; }

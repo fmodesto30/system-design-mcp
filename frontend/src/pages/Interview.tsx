@@ -10,7 +10,7 @@ import { LinkChips, TagChips } from "../components/Chips";
 import { PrepSection } from "../components/PrepSection";
 import { dsaPrep, systemDesignPrep, behavioralPrep } from "../data/interviewPrep";
 import { complexityGuide, structures, type DataStructure } from "../data/dsaFundamentals";
-import { reports, crossLessons, type InterviewReport } from "../data/interviewReports";
+import { reports, crossLessons, pitfalls, resourceStack, type InterviewReport } from "../data/interviewReports";
 
 function QuestionCard({ q }: { q: QuestionSummary }) {
   const [open, setOpen] = useState(false);
@@ -178,6 +178,32 @@ export function InterviewDsa() {
     <div>
       <h1>DSA — estruturas &amp; algoritmos</h1>
       <PrepSection pillar={dsaPrep} />
+      <section className="prep-block resource-stack">
+        <h3>Stack de recursos (sem enrolação)</h3>
+        <p className="muted">
+          <MD text={resourceStack.intro} />
+        </p>
+        {resourceStack.sections.map((s, i) => (
+          <div key={i} className="rs-section">
+            <h4>{s.title}</h4>
+            <ul className="prep-tips">
+              {s.points.map((p, j) => (
+                <li key={j}>
+                  <MD text={p} />
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+        <h4>O fluxo</h4>
+        <ol className="rs-flow">
+          {resourceStack.flow.map((f, i) => (
+            <li key={i}>
+              <MD text={f} />
+            </li>
+          ))}
+        </ol>
+      </section>
     </div>
   );
 }
@@ -433,6 +459,18 @@ export function InterviewRelatos() {
           ))}
         </ul>
       </div>
+      <section className="pitfalls-card">
+        <h2>{pitfalls.title}</h2>
+        <p className="muted">{pitfalls.source}</p>
+        <ol className="pitfalls-list">
+          {pitfalls.items.map((p, i) => (
+            <li key={i}>
+              <strong>{p.erro}.</strong> {p.tip}
+            </li>
+          ))}
+        </ol>
+      </section>
+      <h2>Os loops</h2>
       <div className="report-grid">
         {reports.map((r) => (
           <ReportCard key={r.id} r={r} />

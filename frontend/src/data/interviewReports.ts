@@ -118,4 +118,107 @@ export const reports: InterviewReport[] = [
       "Escreva a complexidade tempo/espaço sempre: faz parte do fluxo esperado.",
     ],
   },
+  {
+    id: "amazon-sde1",
+    company: "Amazon (SDE-1)",
+    result: "passou",
+    resultLabel: "Oferta SDE-1 🎉",
+    summary:
+      "Loop OA → 2 coding rounds → 1 coding + Leadership Principles. Resultado positivo → oferta SDE-1 (India University Graduate). Soluções otimizadas e prep de LP fizeram a diferença.",
+    loop: ["OA", "Coding 1", "Coding 2", "Coding + LP"],
+    rounds: [
+      {
+        type: "OA — Online Assessment",
+        detail:
+          "7 MCQs de debug de código + 2 DSA + um form comportamental longo. Resolveu os 7 debugs e a 1ª DSA em ~10 min; a 2ª parcial. Round “average”, mas garantiu o convite.",
+        questions: [
+          { q: "LC 2265 — Nodes Equal to Average of Subtree", tag: "Árvore / DFS", link: "/entrevista/fundamentos" },
+          { q: "LC 68 — Text Justification", tag: "String / Simulação", link: "/entrevista/dsa" },
+        ],
+        note: "Ser rápido em contests + debug pesa muito aqui.",
+      },
+      {
+        type: "Coding round 1",
+        detail: "1 LC hard de BFS. Codou rápido um BFS + hashmap; entrevistador satisfeito.",
+        questions: [{ q: "Tipo LC 127 — Word Ladder (BFS)", tag: "BFS / Grafo", link: "/entrevista/fundamentos" }],
+      },
+      {
+        type: "Coding round 2",
+        detail: "3 questões em sequência — gostaram da velocidade.",
+        questions: [
+          { q: "LC 863 — All Nodes Distance K in Binary Tree (BFS + parent pointers via hashmap)", tag: "Árvore / BFS", link: "/entrevista/fundamentos" },
+          { q: "Connect ropes com custo mínimo (greedy + priority queue)", tag: "Heap", link: "/entrevista/fundamentos" },
+          { q: "Max steps with reduced m — O(n) → binary search O(log n)", tag: "Binary Search", link: "/entrevista/dsa" },
+        ],
+      },
+      {
+        type: "Coding + Managerial (Leadership Principles)",
+        detail:
+          "LC hard: menor substring de 's' contendo 't' como subsequência (sliding window; tipo LC 76 Minimum Window Substring). Explicou bem, mas não terminou de codar a tempo. + comportamental.",
+        questions: [
+          { q: "Tipo LC 76 — Minimum Window Substring", tag: "Sliding Window", link: "/entrevista/dsa" },
+          { q: "Leadership Principles: Customer Obsession, Bias for Action (STAR)", tag: "STAR / LP", link: "/entrevista/comportamental" },
+        ],
+      },
+    ],
+    lessons: [
+      "Amazon REPETE problemas — foca nas questões LC Amazon-tagged.",
+      "Pratique medium-hard; revise grafos, árvores e DP (super comum na Amazon).",
+      "Prepare as Leadership Principles: respostas em STAR cobrindo várias das 16 LPs, conectadas à sua experiência.",
+    ],
+  },
 ];
+
+export const pitfalls = {
+  title: "Os 7 erros que o entrevistador vê (e como evitar)",
+  source: "de quem tomou 100+ entrevistas no Google",
+  items: [
+    { erro: "Complicar a solução", tip: "Comece pela 1ª abordagem que vier (só explique), depois otimize. Solução simples de entender ganha pontos." },
+    { erro: "Comunicar de menos", tip: "Pense em voz alta. O silêncio tira seu único ajudante — o entrevistador — que poderia te guiar." },
+    { erro: "Não clarificar requisitos", tip: "Pergunte ANTES de codar. Confirme edge cases e constraints cedo." },
+    { erro: "Ignorar edge cases", tip: "Depois de resolver, liste os edge cases e diga como seu código lida — mostra cuidado." },
+    { erro: "Otimizar errado (ou não otimizar)", tip: "Releia a solução e discuta melhorias — ganhos em Big-O, não micro-otimização." },
+    { erro: "Pular o dry run", tip: "80% pulam. Rode o código na mão com um exemplo — pega bug cedo e parece proativo." },
+    { erro: "Travar e entrar em pânico", tip: "Travou? Peça 2 min pra organizar. Ainda travado? Peça uma dica — pedir ajuda é colaborar, não fraqueza." },
+  ],
+};
+
+export const resourceStack = {
+  intro: "Stack “sem enrolação” de quem resolveu 1600+ e passou Amazon + Google. Recurso não passa entrevista — **revisão** passa.",
+  sections: [
+    {
+      title: "Teoria (sob demanda)",
+      points: [
+        "**Cracking the Coding Interview** — NÃO leia capa a capa. Use só quando a teoria de um subtópico tá nebulosa, ou seu código funciona mas você não entende por quê: lê o subtópico → resolve as questões do capítulo → segue.",
+      ],
+    },
+    {
+      title: "Vídeos (seletivo, sem maratona)",
+      points: [
+        "**Tushar Roy** — DP, grafos, segment tree.",
+        "**Abdul Bari** — fundamentos.",
+        "**take U forward (TUF)** — questões de entrevista.",
+        "Assista só pro problema/subtópico que você está praticando.",
+      ],
+    },
+    {
+      title: "Prática nível-entrevista (o mais importante)",
+      points: [
+        "**Questões company-tagged**: LeetCode Premium, ou grátis (`leetcode.ca/tags`, github “company dsa questions”).",
+        "NÃO grinde LC aleatório. Quando vier a call, pratique com **foco na empresa**.",
+      ],
+    },
+    {
+      title: "Velocidade sob pressão",
+      points: [
+        "**LeetCode Weekly/Biweekly contests** = prática cronometrada suficiente.",
+        "Codeforces (Div 2/3/4) opcional, só se curtir. DSA forte já crackeia a maioria — CP não é obrigatório.",
+      ],
+    },
+  ],
+  flow: [
+    "Pegue **um tópico por vez** e aprofunde (sem pular entre tópicos).",
+    "Cobriu todos → resolva os populares **com timer** (Blind 75).",
+    "Entrevista marcada → **foco total** nas questões da empresa.",
+  ],
+};
